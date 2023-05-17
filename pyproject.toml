@@ -1,0 +1,58 @@
+[build-system]
+requires = [
+    "setuptools",
+    "setuptools-scm",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbami"
+authors = [
+    {name = "Jarrett Keifer", email = "jkeifer@element84.com"},
+]
+description = "Lightweight, Python-based, framework-agnostic async PostgreSQL migration tool"
+requires-python = ">=3.9"
+keywords = [
+    "postgresql",
+    "sql",
+    "migration",
+    "async",
+]
+license = {text = "Apache License 2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "asyncpg >=0.27.0",
+    "buildpg >=0.4",
+]
+dynamic = [
+  "version",
+  "readme",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit >=3.1.1",
+    "pre-commit-hooks >=4.4.0",
+    "black >=23.1.0",
+    "httpx >=0.24.0",
+    "ruff >=0.0.253",
+    "mypy >=1.0.1",
+    "pip-tools >=6.12.3",
+    "pytest >=7.2.2",
+    "pytest-asyncio >=0.21.0",
+    "pytest-cov >=4.0.0",
+    "pyupgrade >=3.3.1",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "dbami.__version__"}
+readme = {file = "README.md"}
+
+[[tool.mypy.overrides]]
+module = [
+    "asyncpg",
+    "buildpg",
+]
+ignore_missing_imports = true
