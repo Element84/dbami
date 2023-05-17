@@ -1,61 +1,7 @@
-import random
-import string
 from pathlib import Path
 import pytest
 
 from dbami.db import DB, Migration
-from dbami.util import syncrun
-
-
-@pytest.fixture
-def empty_project(tmp_path: Path):
-    db: DB = DB.new_project(tmp_path)
-    return db
-
-
-@pytest.fixture
-def project(tmp_path: Path):
-    # create some migrations before instantiating the DB instance
-    # to ensure we test the migration load process
-    migrations_dir = DB.project_migrations(tmp_path)
-    migrations_dir.mkdir()
-    migrations_dir.joinpath("00_migration.up.sql").touch()
-    migrations_dir.joinpath("00_migration.down.sql").touch()
-    migrations_dir.joinpath("01_migration.up.sql").touch()
-    db: DB = DB.new_project(tmp_path)
-    db.schema.path.write_text(
-        """
-CREATE TABLE IF NOT EXISTS schema_version (
-  version integer,
-  applied_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX ON schema_version (version);
-CREATE INDEX ON schema_version (applied_at);
-
-INSERT INTO schema_version (version) VALUES (4);
-"""
-    )
-    db.new_migration("migration")
-    db.new_migration("migration")
-    db.new_migration("migration")
-    db.new_fixture("a_fixture")
-    db.new_test("a_test")
-    db.new_test("b_test")
-    return db
-
-
-@pytest.fixture
-def tmp_db():
-    db_postfix = "".join(random.choices(string.ascii_letters, k=5))
-    db_name = f"dbami_test_{db_postfix.lower()}"
-
-    try:
-        syncrun(DB.create_database(db_name))
-        yield db_name
-    finally:
-        syncrun(DB.drop_database(db_name))
-        pass
 
 
 def test_no_project(tmp_path: Path):
@@ -219,36 +165,6 @@ async def test_yield_unapplied_migrations(tmp_db, project) -> None:
         m async for m in project.yield_unapplied_migrations(database=tmp_db)
     ]
     assert len(unapplied) == 5
-
-
-@pytest.mark.asyncio
-async def test_dump(tmp_db, project) -> None:
-    empty_dump: str = """--
--- PostgreSQL database dump
---
-
--- Dumped from database version 15.3 (Debian 15.3-1.pgdg110+1)
--- Dumped by pg_dump version 15.2
-
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
-SET check_function_bodies = false;
-SET xmloption = content;
-SET client_min_messages = warning;
-SET row_security = off;
-
---
--- PostgreSQL database dump complete
---
-
-"""
-    rc, dump = await project.dump("-d", tmp_db)
-    assert rc == 0
-    assert dump == empty_dump
 
 
 @pytest.mark.asyncio

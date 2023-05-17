@@ -1,7 +1,7 @@
 import asyncio
 import asyncpg
 from buildpg import render, V
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, Union
 from pathlib import Path
 from contextlib import asynccontextmanager, AsyncExitStack
 import logging
@@ -140,6 +140,37 @@ def find_next_migration(
 
     # if we got her we don't have a valid migration path :(
     raise ValueError(f"No migration path from schema version {current}")
+
+
+async def pg_dump(*args, pg_dump: Union[str, Path] = "pg_dump") -> tuple[Optional[int], str]:
+    """Async wrapper for executing pg_dump
+
+    Requires that pg_dump be on the path, or its path provided via the pg_dump kwarg.
+
+    Args:
+      *args:
+        All arguments are forwared to pg_dump. See its docs for what it supports.
+
+    Keyword Args:
+      pg_dump: str
+        Path to the pg_dump
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            pg_dump,
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            # this just goes to the parent's stderr
+            stderr=None,
+            # no need for stdin, don't let it consume ours
+            stdin=asyncio.subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        raise FileNotFoundError("pg_dump could not be located: '{pg_dump}'")
+
+    stdout, _ = await proc.communicate()
+
+    return (proc.returncode, stdout.decode())
 
 
 class DB:
@@ -355,21 +386,6 @@ WHERE applied_at = (SELECT max(applied_at) from :version_table)
         while next_migration:
             yield next_migration
             next_migration = next_migration.child
-
-    async def dump(self, *args) -> tuple[Optional[int], str]:
-        proc = await asyncio.create_subprocess_exec(
-            "pg_dump",
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            # this just goes to the parent's stderr
-            stderr=None,
-            # no need for stdin, don't let it consume ours
-            stdin=asyncio.subprocess.DEVNULL,
-        )
-
-        stdout, _ = await proc.communicate()
-
-        return (proc.returncode, stdout.decode())
 
     async def load_schema(self, **kwargs):
         await self.run_sqlfile(self.schema, **kwargs)
