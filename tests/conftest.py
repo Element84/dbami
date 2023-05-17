@@ -41,8 +41,6 @@ INSERT INTO schema_version (version) VALUES (4);
     db.new_migration("migration")
     db.new_migration("migration")
     db.new_fixture("a_fixture")
-    db.new_test("a_test")
-    db.new_test("b_test")
     return db
 
 

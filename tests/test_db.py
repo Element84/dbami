@@ -16,7 +16,6 @@ def test_init(tmp_path: Path):
     assert db.fixtures_dir.is_dir()
     assert db.migrations_dir.is_dir()
     assert db.schema_file.is_file()
-    assert db.tests_dir.is_dir()
 
 
 def test_new_migration(empty_project):
@@ -45,23 +44,6 @@ def test_duplicate_fixture(empty_project):
     with pytest.raises(FileExistsError) as exc_info:
         empty_project.new_fixture(fixture_name)
     assert str(exc_info.value).startswith("Cannot create fixture, already exists:")
-
-
-def test_new_test(empty_project):
-    test_name = "a_test"
-    empty_project.new_test(test_name)
-    assert test_name in empty_project.tests
-    test = empty_project.tests[test_name]
-    assert test.name == test_name
-    assert test.path.is_file()
-
-
-def test_duplicate_test(empty_project):
-    test_name = "a_test"
-    empty_project.new_test(test_name)
-    with pytest.raises(FileExistsError) as exc_info:
-        empty_project.new_test(test_name)
-    assert str(exc_info.value).startswith("Cannot create test, already exists:")
 
 
 def test_project(project):

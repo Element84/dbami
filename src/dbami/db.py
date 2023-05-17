@@ -181,9 +181,6 @@ class DB:
         self.validate_project()
         self.schema = SqlFile(self.schema_file)
         self.migrations = migrations_from_dir(self.migrations_dir)
-        self.tests = {
-            f.name: f for f in (SqlFile(f) for f in self.tests_dir.glob("*.sql"))
-        }
         self.fixtures = {
             f.name: f for f in (SqlFile(f) for f in self.fixtures_dir.glob("*.sql"))
         }
@@ -197,10 +194,6 @@ class DB:
         return project.joinpath("migrations")
 
     @classmethod
-    def project_tests(cls, project: Path):
-        return project.joinpath("tests")
-
-    @classmethod
     def project_fixtures(cls, project: Path):
         return project.joinpath("fixtures")
 
@@ -208,7 +201,6 @@ class DB:
     def new_project(cls, directory: Path):
         cls.project_schema(directory).touch()
         cls.project_migrations(directory).mkdir(exist_ok=True)
-        cls.project_tests(directory).mkdir(exist_ok=True)
         cls.project_fixtures(directory).mkdir(exist_ok=True)
         return cls(directory)
 
@@ -221,10 +213,6 @@ class DB:
         return self.project_migrations(self.project)
 
     @property
-    def tests_dir(self):
-        return self.project_tests(self.project)
-
-    @property
     def fixtures_dir(self):
         return self.project_fixtures(self.project)
 
@@ -232,7 +220,6 @@ class DB:
         schema = self.schema_file
         migrations = self.migrations_dir
         fixtures = self.fixtures_dir
-        tests = self.tests_dir
 
         if not schema.is_file():
             raise FileNotFoundError(
@@ -245,11 +232,6 @@ class DB:
             )
 
         if fixtures.exists() and not fixtures.is_dir():
-            raise ValueError(
-                f"Fixtures directory is not a directory: {migrations}",
-            )
-
-        if tests.exists() and not tests.is_dir():
             raise ValueError(
                 f"Fixtures directory is not a directory: {migrations}",
             )
@@ -296,19 +278,6 @@ class DB:
             f.write_text(content)
 
         self.fixtures[name] = SqlFile(f)
-
-    def new_test(self, name: str, content: Optional[str] = None):
-        f = self.tests_dir.joinpath(f"{name}.sql")
-
-        if f.exists():
-            raise FileExistsError("Cannot create test, already exists: {f}")
-
-        f.touch()
-
-        if content:
-            f.write_text(content)
-
-        self.tests[name] = SqlFile(f)
 
     @staticmethod
     @asynccontextmanager
@@ -516,9 +485,6 @@ CREATE INDEX ON :version_table (applied_at);
                                 conn,
                                 schema_version_table=schema_version_table,
                             )
-
-    async def test(self):
-        pass
 
     async def verify(
         self,
