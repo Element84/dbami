@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 
 import pytest
@@ -161,3 +162,40 @@ async def test_load_fixture_unknown(tmp_db, project) -> None:
     with pytest.raises(FileNotFoundError) as exc_info:
         await project.load_fixture("bad_fixture", database=tmp_db)
     assert str(exc_info.value).startswith("Unknown fixture:")
+
+
+@pytest.mark.asyncio
+async def test_verify_matches(project) -> None:
+    same = await project.verify()
+    assert same
+
+
+@pytest.mark.asyncio
+async def test_verify_different_schema(project) -> None:
+    project.migrations[4].up.path.write_text(
+        """
+CREATE SCHEMA some_schema;
+CREATE TABLE some_schema.some_table (
+    a_col integer PRIMARY KEY,
+    b_col text UNIQUE
+);
+"""
+    )
+    output = io.StringIO()
+    same = await project.verify(output=output)
+    assert not same
+    output.seek(0)
+    outstr = output.read()
+    assert outstr.startswith("--- schema.sql")
+
+
+@pytest.mark.asyncio
+async def test_verify_different_version(project) -> None:
+    project.new_migration("migration")
+    output = io.StringIO()
+    same = await project.verify(output=output)
+    assert not same
+    output.seek(0)
+    outstr = output.read()
+    print(outstr)
+    assert outstr == "Version from schema doesn't match that from migrations: 4 != 5\n"

@@ -1,11 +1,14 @@
 import asyncio
 import logging
+import sys
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator, Optional, Union
+from typing import AsyncGenerator, Optional, TextIO, Union
 
 import asyncpg
 from buildpg import V, render
+
+from dbami.util import random_name
 
 logger = logging.getLogger(__name__)
 
@@ -489,8 +492,65 @@ CREATE INDEX ON :version_table (applied_at);
     async def verify(
         self,
         schema_version_table: str = SCHEMA_VERSION_TABLE,
-        **kwargs,
-    ):
-        # dump with --exclude-table-data SCHEMA_VERSION_TABLE
-        # and get version separately
-        pass
+        _pg_dump: str = "pg_dump",
+        output: TextIO = sys.stderr,
+    ) -> bool:
+        schema_db = random_name("dbami_verify_schema")
+        migrate_db = random_name("dbami_verify_migrate")
+
+        dump_args = [
+            "--exclude-table",
+            schema_version_table,
+        ]
+
+        async def schema():
+            await self.create_database(schema_db)
+            await self.load_schema(database=schema_db)
+            version = await self.get_current_version(database=schema_db)
+            rc, dump = await pg_dump("-d", schema_db, *dump_args, pg_dump=_pg_dump)
+            return version, rc, dump
+
+        async def migrate():
+            await self.create_database(migrate_db)
+            await self.migrate(database=migrate_db)
+            version = await self.get_current_version(database=migrate_db)
+            rc, dump = await pg_dump("-d", migrate_db, *dump_args, pg_dump=_pg_dump)
+            return version, rc, dump
+
+        try:
+            results = await asyncio.gather(schema(), migrate())
+        finally:
+            await self.drop_database(schema_db)
+            await self.drop_database(migrate_db)
+
+        schema_results, migrate_results = results
+        schema_version, schema_rc, schema_dump = schema_results
+        migrate_version, migrate_rc, migrate_dump = migrate_results
+
+        if schema_rc != 0 or migrate_rc != 0:
+            raise RuntimeError("Encoutered an error dumping databases")
+
+        is_diff: bool = False
+
+        if schema_dump != migrate_dump:
+            import difflib
+
+            is_diff = True
+            output.writelines(
+                difflib.unified_diff(
+                    schema_dump.splitlines(keepends=True),
+                    migrate_dump.splitlines(keepends=True),
+                    fromfile="schema.sql",
+                    tofile="combined migrations",
+                )
+            )
+
+        if schema_version != migrate_version:
+            is_diff = True
+            print(
+                "Version from schema doesn't match that from migrations: "
+                f"{schema_version} != {migrate_version}",
+                file=output,
+            )
+
+        return not is_diff

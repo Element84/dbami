@@ -1,11 +1,9 @@
-import random
-import string
 from pathlib import Path
 
 import pytest
 
 from dbami.db import DB
-from dbami.util import syncrun
+from dbami.util import random_name, syncrun
 
 
 @pytest.fixture
@@ -46,8 +44,7 @@ INSERT INTO schema_version (version) VALUES (4);
 
 @pytest.fixture
 def tmp_db():
-    db_postfix = "".join(random.choices(string.ascii_letters, k=5))
-    db_name = f"dbami_test_{db_postfix.lower()}"
+    db_name = random_name("dbami_test")
 
     try:
         syncrun(DB.create_database(db_name))
