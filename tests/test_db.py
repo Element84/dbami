@@ -158,7 +158,7 @@ async def test_rollback_no_down(tmp_db, project):
         await project.migrate(target=1, database=tmp_db)
     assert str(exc_info.value) == (
         "Cannot rollback from version 4 to 1: "
-        "one or more migrations do not have down files",
+        "one or more migrations do not have down files"
     )
 
 

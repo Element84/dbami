@@ -480,7 +480,7 @@ CREATE INDEX ON :version_table (applied_at);
                     if next_migration.down is None:
                         raise ValueError(
                             f"Cannot rollback from version {schema_version} "
-                            "to {target}: one or more migrations do not have "
+                            f"to {target}: one or more migrations do not have "
                             "down files",
                         )
 
