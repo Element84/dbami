@@ -1,11 +1,11 @@
 import asyncio
-import asyncpg
-from buildpg import render, V
-from typing import Optional, AsyncGenerator, Union
-from pathlib import Path
-from contextlib import asynccontextmanager, AsyncExitStack
 import logging
+from contextlib import AsyncExitStack, asynccontextmanager
+from pathlib import Path
+from typing import AsyncGenerator, Optional, Union
 
+import asyncpg
+from buildpg import V, render
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,9 @@ def find_next_migration(
     raise ValueError(f"No migration path from schema version {current}")
 
 
-async def pg_dump(*args, pg_dump: Union[str, Path] = "pg_dump") -> tuple[Optional[int], str]:
+async def pg_dump(
+    *args, pg_dump: Union[str, Path] = "pg_dump"
+) -> tuple[Optional[int], str]:
     """Async wrapper for executing pg_dump
 
     Requires that pg_dump be on the path, or its path provided via the pg_dump kwarg.

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import pytest
 
 from dbami.db import DB, Migration

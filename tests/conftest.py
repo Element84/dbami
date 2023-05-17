@@ -1,10 +1,12 @@
-import pytest
 import random
 import string
-
 from pathlib import Path
+
+import pytest
+
 from dbami.db import DB
 from dbami.util import syncrun
+
 
 @pytest.fixture
 def empty_project(tmp_path: Path):
