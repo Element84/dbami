@@ -12,16 +12,47 @@ jobs:
     strategy:
       matrix:
         python-version:
+          - "3.9"
+          - "3.10"
           - "3.11"
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 7654:5432
+
     steps:
+      - name: Install pg_dump
+        run: sudo apt-get install postgresql-client
+
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Load .env file into environment
+        uses: cardinalby/export-env-action@v2
+        with:
+          envFile: '.env'
+          expand: true
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: |
+            pyproject.toml
+            **/requirements*.txt
 
       - name: Install dependencies
         run: |
@@ -33,14 +64,13 @@ jobs:
         run: |
           ruff check .
 
-      - name: Create DB Container
-        run: docker compose up --build -V -d
-
       - name: Test with pytest
-        run: pytest --cov=swoop --cov-report=xml
+        run: |
+          pytest --cov=swoop --cov-report=xml -m "not ci_skip"
+          pytest tests/test_cleanup.py
 
       - name: "Upload coverage to Codecov"
         uses: codecov/codecov-action@v3
         with:
-          fail_ci_if_error: true
+          #fail_ci_if_error: true
           verbose: true

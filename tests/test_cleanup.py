@@ -1,9 +1,11 @@
+import pytest
 from buildpg import V, render
 
 from dbami.db import DB
 from dbami.util import syncrun
 
 
+@pytest.mark.ci_skip
 def test_verify_all_test_databases_are_cleaned_up(test_db_name_stem: str) -> None:
     query, params = render(
         "select exists(select 1 from pg_database where :where)",
