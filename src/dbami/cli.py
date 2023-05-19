@@ -82,11 +82,10 @@ def arg_migration_target(
 ) -> None:
     parser.add_argument(
         "--target",
-        action=EnvDefault,
-        envvars=("TARGET_MIGRATION_ID",),
+        metavar="TARGET_MIGRATION_ID",
         default=default_label,
         type=lambda x: target_type(x, default_label),
-        help="(default: 'latest')",
+        help=f"(default: '{default_label}')",
     )
 
 
