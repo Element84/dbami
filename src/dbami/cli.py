@@ -214,6 +214,18 @@ class Init(Command):
         return 0
 
 
+class New(Command):
+    help: str = "Create a new migration with the given name"
+
+    def set_args(self, parser: argparse.ArgumentParser) -> None:
+        arg_project(parser)
+        parser.add_argument("migration_name")
+
+    def __call__(self, args: argparse.Namespace) -> int:
+        DB(args.project_directory).new_migration(args.migration_name)
+        return 0
+
+
 class Create(Command):
     help: str = "Create a database"
 
@@ -373,6 +385,7 @@ def get_cli() -> CLI:
         description="The database friend you didn't know you needed.",
     )
     cli.add_command(Init())
+    cli.add_command(New())
     cli.add_command(Create())
     cli.add_command(Drop())
     cli.add_command(Pending())

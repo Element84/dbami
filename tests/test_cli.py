@@ -81,6 +81,23 @@ def test_init(tmp_chdir):
     assert True
 
 
+def test_new(project_dir):
+    rc, out, err = run_cli("new", "a_migration")
+    print(out)
+    print(err)
+    assert rc == 0
+    assert (
+        len(list(project_dir.joinpath("migrations").glob("*_a_migration.*.sql"))) == 2
+    )
+
+
+def test_new_no_name(project_dir):
+    rc, out, err = run_cli("new")
+    print(out)
+    print(err)
+    assert rc == 2
+
+
 def test_create(tmp_db_name):
     rc, out, err = run_cli("create", "--database", tmp_db_name)
     print(out)
