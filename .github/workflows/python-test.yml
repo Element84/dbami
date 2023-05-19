@@ -16,26 +16,7 @@ jobs:
           - "3.10"
           - "3.11"
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_PASSWORD: password
-          POSTGRES_USER: postgres
-        # Set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 7654:5432
-
     steps:
-      - name: Install pg_dump
-        run: sudo apt-get install postgresql-client
-
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -44,6 +25,21 @@ jobs:
         with:
           envFile: '.env'
           expand: true
+
+      - name: Set pg_dump wrapper path
+        run: echo "DBAMI_PG_DUMP=$(realpath pg-dump-wrapper)" >> $GITHUB_ENV
+
+      - name: Make custom pg_dump wrapper
+        run: |
+          install -m 755 <(cat <<'EOF'
+          #!/bin/sh
+          cd "$(dirname "$0")"
+          docker compose exec postgres pg_dump "$@"
+          EOF
+          ) "$DBAMI_PG_DUMP"
+
+      - name: Bring up postgres
+        run: docker compose up -d
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -66,11 +62,11 @@ jobs:
 
       - name: Test with pytest
         run: |
-          pytest --cov=swoop --cov-report=xml -m "not ci_skip"
+          pytest --cov=dbami --cov-report=xml
           pytest tests/test_cleanup.py
 
       - name: "Upload coverage to Codecov"
         uses: codecov/codecov-action@v3
         with:
-          #fail_ci_if_error: true
+          fail_ci_if_error: true
           verbose: true

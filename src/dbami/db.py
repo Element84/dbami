@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
@@ -153,7 +154,7 @@ def find_next_migration(
 
 
 async def pg_dump(
-    *args, pg_dump: Union[str, Path] = "pg_dump"
+    *args, pg_dump: Union[str, Path, None] = None
 ) -> tuple[Optional[int], str]:
     """Async wrapper for executing pg_dump
 
@@ -164,9 +165,12 @@ async def pg_dump(
         All arguments are forwared to pg_dump. See its docs for what it supports.
 
     Keyword Args:
-      pg_dump: str
-        Path to the pg_dump
+      pg_dump: str | Path | None
+        Path to or name of the pg_dump command (default "pg_dump")
     """
+    if pg_dump is None:
+        pg_dump = os.getenv("DBAMI_PG_DUMP", "pg_dump")
+
     try:
         proc = await asyncio.create_subprocess_exec(
             pg_dump,
@@ -178,7 +182,7 @@ async def pg_dump(
             stdin=asyncio.subprocess.DEVNULL,
         )
     except FileNotFoundError:
-        raise FileNotFoundError("pg_dump could not be located: '{pg_dump}'")
+        raise FileNotFoundError(f"pg_dump could not be located: '{pg_dump}'")
 
     stdout, _ = await proc.communicate()
 
@@ -514,7 +518,7 @@ CREATE INDEX ON :version_table (applied_at);
 
     async def verify(
         self,
-        _pg_dump: str = "pg_dump",
+        _pg_dump: Optional[str] = None,
         output: TextIO = sys.stderr,
     ) -> bool:
         schema_db = random_name("dbami_verify_schema")
