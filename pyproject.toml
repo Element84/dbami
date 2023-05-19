@@ -50,6 +50,13 @@ dev = [
     "ruff >=0.0.253",
 ]
 
+# sadly, we need to include this non-dependency in our
+# requirements.txt to satisfy snyk, so make sure to run
+# `pip-compile` with `--extra snyk`
+snyk = [
+    "typing-extensions",
+]
+
 [tool.setuptools.dynamic]
 version = {attr = "dbami.__version__"}
 readme = {file = "README.md"}
