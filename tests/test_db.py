@@ -2,6 +2,7 @@ import io
 from pathlib import Path
 from typing import Union
 
+import asyncpg
 import pytest
 
 from dbami.db import DB, Migration
@@ -70,8 +71,27 @@ async def test_load_schema(tmp_db, project):
 
 
 @pytest.mark.asyncio
+async def test_load_schema_bad_sql(tmp_db, project):
+    schema_file = project.schema.path
+    schema = schema_file.read_text()
+    schema += "\n\n CREATE TABLE bad_table (fk integer REFERENCES nothing);"
+    schema_file.write_text(schema)
+    with pytest.raises(asyncpg.UndefinedTableError):
+        await project.load_schema(database=tmp_db)
+    assert await project.get_current_version(database=tmp_db) is None
+
+
+@pytest.mark.asyncio
 async def test_migrate(tmp_db, project):
     await project.migrate(database=tmp_db)
+    assert await project.get_current_version(database=tmp_db) == 4
+
+
+@pytest.mark.asyncio
+async def test_migrate_bad_file(tmp_db, project):
+    project.new_migration("bad_migration", up_content="not valid sql")
+    with pytest.raises(asyncpg.PostgresSyntaxError):
+        await project.migrate(database=tmp_db)
     assert await project.get_current_version(database=tmp_db) == 4
 
 
@@ -80,6 +100,15 @@ async def test_rollback(tmp_db, project):
     await project.load_schema(database=tmp_db)
     await project.migrate(target=2, database=tmp_db)
     assert await project.get_current_version(database=tmp_db) == 2
+
+
+@pytest.mark.asyncio
+async def test_rollback_bad_file(tmp_db, project):
+    project.migrations[2].down.path.write_text("not valid sql")
+    await project.load_schema(database=tmp_db)
+    with pytest.raises(asyncpg.PostgresSyntaxError):
+        await project.migrate(target=2, database=tmp_db)
+    assert await project.get_current_version(database=tmp_db) == 3
 
 
 @pytest.mark.asyncio
