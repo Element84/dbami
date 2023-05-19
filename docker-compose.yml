@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: "${PGPASSWORD:-password}"
       POSTGRES_USER: "${PGUSER:-postgres}"
       POSTGRES_HOST_AUTH_METHOD: "trust"
+      PGUSER: "${PGUSER:-postgres}"
+      PGPASSWORD: "${PGPASSWORD:-password}"
     ports:
       - "${PGPORT:-5432}:5432"
     volumes:

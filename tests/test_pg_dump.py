@@ -44,7 +44,6 @@ async def test_pg_dump(tmp_db) -> None:
     assert remove_versions(dump) == EMPTY_DUMP
 
 
-@pytest.mark.ci_skip
 @pytest.mark.asyncio
 async def test_pg_dump_custom_path(tmp_db) -> None:
     import os
