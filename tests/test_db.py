@@ -1,5 +1,6 @@
 import io
 from pathlib import Path
+from typing import Union
 
 import pytest
 
@@ -58,8 +59,8 @@ def test_create_database(tmp_db):
 
 
 @pytest.mark.asyncio
-async def test_get_version_not_migrated(tmp_db):
-    assert await DB.get_current_version(database=tmp_db) is None
+async def test_get_version_not_migrated(tmp_db, project):
+    assert await project.get_current_version(database=tmp_db) is None
 
 
 @pytest.mark.asyncio
@@ -93,7 +94,7 @@ async def test_rollback_no_down(tmp_db, project):
 
 
 @pytest.mark.asyncio
-async def test_migrate_no_migrations(tmp_db, project):
+async def test_migrate_no_unapplied_migrations(tmp_db, project):
     await project.load_schema(database=tmp_db)
     await project.migrate(database=tmp_db)
     assert await project.get_current_version(database=tmp_db) == 4
@@ -101,15 +102,9 @@ async def test_migrate_no_migrations(tmp_db, project):
 
 @pytest.mark.asyncio
 async def test_migrate_different_schema_for_versions(tmp_db, project):
-    table = "schema.table"
-    await project.migrate(schema_version_table=table, database=tmp_db)
-    assert (
-        await project.get_current_version(
-            schema_version_table=table,
-            database=tmp_db,
-        )
-        == 4
-    )
+    project.schema_version_table = "schema.table"
+    await project.migrate(database=tmp_db)
+    assert await project.get_current_version(database=tmp_db) == 4
 
 
 @pytest.mark.asyncio
@@ -144,11 +139,27 @@ async def test_migrate_rollback_from_unknown_schema(tmp_db, project):
 
 
 @pytest.mark.asyncio
+async def test_migrate_no_migrations(tmp_db, tmp_path) -> None:
+    db = DB.new_project(tmp_path)
+    await db.migrate(database=tmp_db)
+    assert await db.get_current_version(database=tmp_db) is None
+
+
+@pytest.mark.asyncio
 async def test_yield_unapplied_migrations(tmp_db, project) -> None:
     unapplied: list[Migration] = [
         m async for m in project.yield_unapplied_migrations(database=tmp_db)
     ]
     assert len(unapplied) == 5
+
+
+@pytest.mark.asyncio
+async def test_yield_unapplied_migrations_none(tmp_db, tmp_path) -> None:
+    db: DB = DB.new_project(tmp_path)
+    unapplied: list[Migration] = [
+        m async for m in db.yield_unapplied_migrations(database=tmp_db)
+    ]
+    assert len(unapplied) == 0
 
 
 @pytest.mark.asyncio
@@ -199,3 +210,20 @@ async def test_verify_different_version(project) -> None:
     outstr = output.read()
     print(outstr)
     assert outstr == "Version from schema doesn't match that from migrations: 4 != 5\n"
+
+
+def test_load_project_dir(project) -> None:
+    expected_migration_count = 5
+    project_dir = project.project_dir
+    db = DB(project_dir)
+    assert len(db.migrations) == expected_migration_count
+    assert len(db.fixtures) == 1
+
+    # make sure we can traverse our migration relations
+    migrations = []
+    child: Union[Migration, None] = db.migrations[0]
+    while child:
+        migrations.append(child)
+        child = child.child
+
+    assert len(migrations) == expected_migration_count

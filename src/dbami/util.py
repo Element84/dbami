@@ -1,9 +1,10 @@
 import asyncio
 import random
 import string
+from typing import Any, Coroutine
 
 
-def syncrun(coroutine):
+def syncrun(coroutine: Coroutine) -> Any:
     return asyncio.run(coroutine)
 
 

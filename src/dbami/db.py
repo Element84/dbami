@@ -3,17 +3,16 @@ import logging
 import sys
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator, Optional, TextIO, Union
+from typing import AsyncGenerator, Literal, Optional, TextIO, Union
 
 import asyncpg
 from buildpg import V, render
 
+from dbami import exceptions
+from dbami.constants import SCHEMA_VERSION_TABLE
 from dbami.util import random_name
 
 logger = logging.getLogger(__name__)
-
-
-SCHEMA_VERSION_TABLE = "schema_version"
 
 
 class SqlFile:
@@ -81,7 +80,6 @@ class Migration:
 
         down = None
         down_path = up_path.with_name(f"{full_name}.down.sql")
-        print(down_path, down_path.is_file())
         if down_path.is_file():
             down = SqlFile(down_path)
 
@@ -116,9 +114,15 @@ def migrations_from_dir(directory: Path) -> dict[int, Migration]:
     parent: Optional[Migration] = None
     migrations: dict[int, Migration] = {}
 
-    for migration in sorted(directory.glob("*.up.sql")):
-        parent = Migration.from_up_path(migration, parent=parent)
-        migrations[parent.id] = parent
+    for migration_path in sorted(directory.glob("*.up.sql")):
+        migration = Migration.from_up_path(migration_path)
+        migrations[migration.id] = migration
+
+    for _, migration in sorted(migrations.items()):
+        if parent:
+            parent.child = migration
+            migration.parent = parent
+        parent = migration
 
     return migrations
 
@@ -126,6 +130,9 @@ def migrations_from_dir(directory: Path) -> dict[int, Migration]:
 def find_next_migration(
     current: int, migrations: dict[int, Migration]
 ) -> Optional[Migration]:
+    if not migrations:
+        return None
+
     try:
         # current migration known, return its child, if one
         return migrations[current].child
@@ -142,7 +149,7 @@ def find_next_migration(
         return migrations[min_id]
 
     # if we got her we don't have a valid migration path :(
-    raise ValueError(f"No migration path from schema version {current}")
+    raise exceptions.MigrationError(f"No migration path from schema version {current}")
 
 
 async def pg_dump(
@@ -179,14 +186,19 @@ async def pg_dump(
 
 
 class DB:
-    def __init__(self, project: Path):
-        self.project = project
+    def __init__(
+        self,
+        project: Path,
+        schema_version_table: str = SCHEMA_VERSION_TABLE,
+    ) -> None:
+        self.project_dir = project
         self.validate_project()
         self.schema = SqlFile(self.schema_file)
         self.migrations = migrations_from_dir(self.migrations_dir)
         self.fixtures = {
             f.name: f for f in (SqlFile(f) for f in self.fixtures_dir.glob("*.sql"))
         }
+        self.schema_version_table = schema_version_table
 
     @classmethod
     def project_schema(cls, project: Path):
@@ -209,15 +221,15 @@ class DB:
 
     @property
     def schema_file(self):
-        return self.project_schema(self.project)
+        return self.project_schema(self.project_dir)
 
     @property
     def migrations_dir(self):
-        return self.project_migrations(self.project)
+        return self.project_migrations(self.project_dir)
 
     @property
     def fixtures_dir(self):
-        return self.project_fixtures(self.project)
+        return self.project_fixtures(self.project_dir)
 
     def validate_project(self):
         schema = self.schema_file
@@ -245,8 +257,8 @@ class DB:
     def new_migration(
         self,
         name: str,
-        up_content: Optional[str] = None,
-        down_content: Optional[str] = None,
+        up_content: str = "",
+        down_content: Optional[str] = "",
     ):
         _id = self.next_migration_id()
         base = self.migrations_dir.joinpath(f"{str(_id).zfill(5)}_{name}")
@@ -255,10 +267,10 @@ class DB:
         up.touch()
         down.touch()
 
-        if up_content:
+        if up_content is not None:
             up.write_text(up_content)
 
-        if down_content:
+        if down_content is not None:
             down.write_text(down_content)
 
         self.migrations[_id] = Migration(
@@ -269,7 +281,7 @@ class DB:
             parent=self.migrations.get(_id - 1),
         )
 
-    def new_fixture(self, name: str, content: Optional[str] = None):
+    def new_fixture(self, name: str, content: str = ""):
         f = self.fixtures_dir.joinpath(f"{name}.sql")
 
         if f.exists():
@@ -277,7 +289,7 @@ class DB:
 
         f.touch()
 
-        if content:
+        if content is not None:
             f.write_text(content)
 
         self.fixtures[name] = SqlFile(f)
@@ -324,16 +336,14 @@ class DB:
             ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
             await conn.execute(sql)
 
-    @classmethod
     async def get_current_version(
-        cls,
-        schema_version_table: str = SCHEMA_VERSION_TABLE,
+        self,
         **kwargs,
     ) -> Optional[int]:
         async with AsyncExitStack() as stack:
             conn: asyncpg.Connection = kwargs.get(
                 "conn"
-            ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
+            ) or await stack.enter_async_context(self.get_db_connection(**kwargs))
 
             try:
                 version = await conn.fetchval(
@@ -343,7 +353,7 @@ class DB:
 FROM :version_table
 WHERE applied_at = (SELECT max(applied_at) from :version_table)
 """,
-                        version_table=V(schema_version_table),
+                        version_table=V(self.schema_version_table),
                     )[0],
                 )
             except asyncpg.UndefinedTableError:
@@ -354,7 +364,8 @@ WHERE applied_at = (SELECT max(applied_at) from :version_table)
     async def yield_unapplied_migrations(
         self, **kwargs
     ) -> AsyncGenerator[Migration, None]:
-        schema_version = await self.get_current_version(**kwargs) or -1
+        _version = await self.get_current_version(**kwargs)
+        schema_version = _version if _version is not None else -1
         next_migration = find_next_migration(schema_version, self.migrations)
 
         while next_migration:
@@ -376,7 +387,6 @@ WHERE applied_at = (SELECT max(applied_at) from :version_table)
         self,
         version: int,
         conn,
-        schema_version_table: str = SCHEMA_VERSION_TABLE,
     ):
         table_sql, _ = render(
             """
@@ -388,11 +398,11 @@ CREATE TABLE IF NOT EXISTS :version_table (
 CREATE INDEX ON :version_table (version);
 CREATE INDEX ON :version_table (applied_at);
 """,
-            version_table=V(schema_version_table),
+            version_table=V(self.schema_version_table),
         )
         version_sql, params = render(
             "INSERT INTO :version_table (version) VALUES (:version)",
-            version_table=V(schema_version_table),
+            version_table=V(self.schema_version_table),
             version=version,
         )
 
@@ -402,7 +412,7 @@ CREATE INDEX ON :version_table (applied_at);
             async with conn.transaction():
                 await conn.execute(table_sql)
         except asyncpg.InvalidSchemaNameError:
-            schema = schema_version_table.split(".")[0]
+            schema = self.schema_version_table.split(".")[0]
             schema_sql, _ = render(
                 "CREATE SCHEMA IF NOT EXISTS :schema",
                 schema=V(schema),
@@ -415,11 +425,15 @@ CREATE INDEX ON :version_table (applied_at);
     async def migrate(
         self,
         target: Optional[int] = None,
-        schema_version_table: str = SCHEMA_VERSION_TABLE,
+        direction: Union[Literal["up"], Literal["down"], None] = None,
         **kwargs,
     ):
+        if not self.migrations:
+            return
+
         async with self.get_db_connection(**kwargs) as conn:
-            schema_version: int = await self.get_current_version(conn=conn) or -1
+            _version = await self.get_current_version(conn=conn)
+            schema_version: int = _version if _version is not None else -1
 
             if target is None:
                 target = max(self.migrations.keys())
@@ -427,7 +441,7 @@ CREATE INDEX ON :version_table (applied_at);
                 # if target was not specified then we never want to roll back
                 if schema_version > target:
                     logger.warning(
-                        "Current schema version % greater than all migrations",
+                        "Current schema version %s greater than all migrations",
                         schema_version,
                     )
                     return
@@ -436,12 +450,18 @@ CREATE INDEX ON :version_table (applied_at);
                 return
 
             if target not in self.migrations:
-                raise ValueError(
+                raise exceptions.MigrationError(
                     f"Target migration ID '{target}' has no known migration"
                 )
 
             # moving forward
             if schema_version < target:
+                if direction and direction != "up":
+                    raise exceptions.DirectionError(
+                        "Target would move version forward and direction is "
+                        f"{direction}: can't go {schema_version} -> {target}",
+                    )
+
                 next_migration = find_next_migration(schema_version, self.migrations)
 
                 while next_migration and next_migration.id <= target:
@@ -450,16 +470,20 @@ CREATE INDEX ON :version_table (applied_at);
                         await self._update_schema_version(
                             next_migration.id,
                             conn,
-                            schema_version_table=schema_version_table,
                         )
                     next_migration = next_migration.child
 
             # rolling back
             else:
+                if direction and direction != "down":
+                    raise exceptions.DirectionError(
+                        "Target would roll back version and direction is "
+                        f"{direction}: can't go {schema_version} -> {target}",
+                    )
                 try:
                     next_migration = self.migrations[schema_version]
                 except KeyError:
-                    raise ValueError(
+                    raise exceptions.MigrationError(
                         f"Schema version '{schema_version}' "
                         "does not have associated migration",
                     )
@@ -468,7 +492,7 @@ CREATE INDEX ON :version_table (applied_at);
                 chain: list[Migration] = []
                 while next_migration and next_migration.id >= target:
                     if next_migration.down is None:
-                        raise ValueError(
+                        raise exceptions.MigrationError(
                             f"Cannot rollback from version {schema_version} "
                             f"to {target}: one or more migrations do not have "
                             "down files",
@@ -486,12 +510,10 @@ CREATE INDEX ON :version_table (applied_at);
                             await self._update_schema_version(
                                 migration.id,
                                 conn,
-                                schema_version_table=schema_version_table,
                             )
 
     async def verify(
         self,
-        schema_version_table: str = SCHEMA_VERSION_TABLE,
         _pg_dump: str = "pg_dump",
         output: TextIO = sys.stderr,
     ) -> bool:
@@ -500,7 +522,7 @@ CREATE INDEX ON :version_table (applied_at);
 
         dump_args = [
             "--exclude-table",
-            schema_version_table,
+            self.schema_version_table,
         ]
 
         async def schema():
@@ -518,7 +540,10 @@ CREATE INDEX ON :version_table (applied_at);
             return version, rc, dump
 
         try:
-            results = await asyncio.gather(schema(), migrate())
+            results: tuple[
+                tuple[Optional[int], Optional[int], str],
+                tuple[Optional[int], Optional[int], str],
+            ] = await asyncio.gather(schema(), migrate())
         finally:
             await self.drop_database(schema_db)
             await self.drop_database(migrate_db)

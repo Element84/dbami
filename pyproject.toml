@@ -31,6 +31,9 @@ dynamic = [
   "readme",
 ]
 
+[project.scripts]
+dbami = "dbami.__main__:main"
+
 [project.optional-dependencies]
 dev = [
     "black >=23.1.0",
