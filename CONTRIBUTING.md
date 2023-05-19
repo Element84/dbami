@@ -45,7 +45,7 @@ frozen `requirements.txt` file is generated from that list using the
 `pip-compile` utility (from the dev dependency `pip-tools`). Simply run:
 
 ```commandline
-pip-compile
+pip-compile --extra snyk
 ```
 
 ### Updating package pinning
