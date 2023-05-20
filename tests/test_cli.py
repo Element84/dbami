@@ -155,6 +155,13 @@ def test_current_schema(tmp_db, project_dir):
     assert out == "None\n"
 
 
+def test_load_schema(tmp_db, project_dir):
+    rc, out, err = run_cli("load-schema", "--database", tmp_db)
+    print(out)
+    print(err)
+    assert rc == 0
+
+
 def test_migrate(tmp_db, project_dir):
     rc, out, err = run_cli("migrate", "--database", tmp_db)
     print(out)
@@ -355,3 +362,46 @@ def test_up_twice(tmp_db_name, project_dir):
     print(err)
     assert rc == 0
     assert out == "4\n"
+
+
+def test_verify(tmp_db, project_dir):
+    rc, out, err = run_cli("verify")
+    print(out)
+    print(err)
+    assert rc == 0
+
+
+def test_verify_bad_pg_dump(tmp_db, project_dir):
+    with pytest.raises(FileNotFoundError) as exc_info:
+        run_cli("verify", "--pg-dump", "/bad/path")
+    assert str(exc_info.value).startswith("pg_dump could not be located:")
+
+
+def test_verify_wrong_version(tmp_db, project_dir):
+    DB(project_dir).new_migration("new_migration")
+    rc, out, err = run_cli("verify")
+    print(out)
+    print(err)
+    assert rc == 1
+    assert err == "Version from schema doesn't match that from migrations: 4 != 5\n"
+
+
+def test_verify_schema_diff(tmp_db, project_dir):
+    DB(project_dir).migrations[4].up.path.write_text(
+        "CREATE TABLE test_table (id text NOT NULL);"
+    )
+    rc, out, err = run_cli("verify")
+    print(out)
+    print(err)
+    assert rc == 1
+    assert err.startswith("--- schema.sql")
+
+
+def test_version():
+    from dbami.version import __version__
+
+    rc, out, err = run_cli("version")
+    print(out)
+    print(err)
+    assert rc == 0
+    assert out.strip().endswith(str(__version__))
