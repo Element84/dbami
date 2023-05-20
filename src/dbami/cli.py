@@ -89,6 +89,16 @@ def arg_migration_target(
     )
 
 
+def arg_pg_dump_exec(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--pg-dump",
+        action=EnvDefault,
+        envvars=["DBAMI_PG_DUMP"],
+        default="pg_dump",
+        help=("path to pg_dump executable or name to lookup on path"),
+    )
+
+
 class EnvDefault(argparse.Action):
     def __init__(
         self,
@@ -161,7 +171,9 @@ class Command(abc.ABC):
     def set_args(self, parser: argparse.ArgumentParser) -> None:
         pass
 
-    def process_args(self, args: list[Any]) -> None:
+    def process_args(
+        self, parser: argparse.ArgumentParser, args: argparse.Namespace
+    ) -> None:
         pass
 
     @abc.abstractmethod
@@ -174,6 +186,7 @@ class CLI:
         self.parser = argparse.ArgumentParser(
             prog=prog,
             description=description,
+            formatter_class=argparse.RawTextHelpFormatter,
         )
         self._subparsers = self.parser.add_subparsers(
             title="subcommands",
@@ -199,7 +212,7 @@ class CLI:
             self.parser.print_help()
             sys.exit(2)
 
-        args._cmd.process_args(args)
+        args._cmd.process_args(self.parser, args)
         sys.exit(args._cmd(args))
 
 
@@ -286,6 +299,23 @@ class CurrentSchema(Command):
         async def run() -> int:
             db = DB(args.project_directory)
             print(await db.get_current_version(database=args.database))
+            return 0
+
+        return syncrun(run())
+
+
+class LoadSchema(Command):
+    help: str = "Load the schema.sql into a database"
+    name: str = "load-schema"
+
+    def set_args(self, parser: argparse.ArgumentParser) -> None:
+        arg_project(parser)
+        arg_wait_timeout(parser)
+        arg_database(parser)
+
+    def __call__(self, args: argparse.Namespace) -> int:
+        async def run() -> int:
+            await DB(args.project_directory).load_schema(database=args.database)
             return 0
 
         return syncrun(run())
@@ -379,6 +409,33 @@ class Up(Command):
         return syncrun(run())
 
 
+class Verify(Command):
+    help: str = "Check that the schema and migrations are in sync"
+
+    def set_args(self, parser: argparse.ArgumentParser) -> None:
+        arg_wait_timeout(parser)
+        arg_project(parser)
+        arg_version_table(parser)
+        arg_pg_dump_exec(parser)
+
+    def __call__(self, args: argparse.Namespace) -> int:
+        async def run() -> int:
+            db = DB(args.project_directory)
+            return int(not await db.verify(_pg_dump=args.pg_dump))
+
+        return syncrun(run())
+
+
+class Version(Command):
+    help: str = "Print the dbami version"
+
+    def __call__(self, args: argparse.Namespace) -> int:
+        from dbami.version import __version__
+
+        print(f"dbami version: {__version__}")
+        return 0
+
+
 def get_cli() -> CLI:
     cli = CLI(
         prog="dbami",
@@ -390,8 +447,11 @@ def get_cli() -> CLI:
     cli.add_command(Drop())
     cli.add_command(Pending())
     cli.add_command(CurrentSchema())
+    cli.add_command(LoadSchema())
     cli.add_command(Migrate())
     cli.add_command(Rollback())
     cli.add_command(Up())
+    cli.add_command(Verify())
+    cli.add_command(Version())
 
     return cli

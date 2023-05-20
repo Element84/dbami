@@ -519,8 +519,11 @@ CREATE INDEX ON :version_table (applied_at);
     async def verify(
         self,
         _pg_dump: Optional[str] = None,
-        output: TextIO = sys.stderr,
+        output: Optional[TextIO] = None,
     ) -> bool:
+        if output is None:
+            output = sys.stderr
+
         schema_db = random_name("dbami_verify_schema")
         migrate_db = random_name("dbami_verify_migrate")
 
@@ -553,6 +556,7 @@ CREATE INDEX ON :version_table (applied_at);
             await self.drop_database(migrate_db)
 
         schema_results, migrate_results = results
+
         schema_version, schema_rc, schema_dump = schema_results
         migrate_version, migrate_rc, migrate_dump = migrate_results
 
