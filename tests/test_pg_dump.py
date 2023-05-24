@@ -1,6 +1,6 @@
 import pytest
 
-from dbami.db import pg_dump
+from dbami.pg_dump import pg_dump
 
 EMPTY_DUMP: str = """--
 -- PostgreSQL database dump

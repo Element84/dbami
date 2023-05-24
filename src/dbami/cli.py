@@ -461,13 +461,13 @@ class Verify(DbamiCommand):
 
     def __call__(self, args: argparse.Namespace) -> int:
         async def run() -> int:
-            return int(not await args.db.verify(_pg_dump=args.pg_dump))
+            return int(not await args.db.verify(pg_dump=args.pg_dump))
 
         return syncrun(run())
 
 
 class Version(DbamiCommand):
-    help: str = "Print the dbami version"
+    help: str = "Print the cli version"
 
     def __call__(self, args: argparse.Namespace) -> int:
         from dbami.version import __version__
@@ -488,10 +488,10 @@ class CLI(abc.ABC):
             formatter_class=argparse.RawTextHelpFormatter,
         )
         self._subparsers = self.parser.add_subparsers(
-            title="subcommands",
-            dest="subcommand",
+            title="commands",
+            dest="command",
         )
-        self._subparsers.metavar = "{command}"
+        self._subparsers.metavar = "[command]"
 
     def add_command(self, command: Command) -> None:
         parser = self._subparsers.add_parser(
@@ -508,8 +508,8 @@ class CLI(abc.ABC):
     ) -> argparse.Namespace:
         args: argparse.Namespace = self.parser.parse_args(argv)
 
-        if args.subcommand is None:
-            printe("error: subcommand required")
+        if args.command is None:
+            printe("error: command required")
             self.parser.print_help()
             sys.exit(2)
 
