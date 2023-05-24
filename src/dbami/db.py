@@ -312,17 +312,17 @@ class DB:
                 "conn"
             ) or await stack.enter_async_context(self.get_db_connection(**kwargs))
 
-            try:
-                version = await conn.fetchval(
-                    render(
-                        """SELECT
-    version
+            query, _ = render(
+                """SELECT
+version
 FROM :version_table
 WHERE applied_at = (SELECT max(applied_at) from :version_table)
 """,
-                        version_table=V(self.schema_version_table),
-                    )[0],
-                )
+                version_table=V(self.schema_version_table),
+            )
+
+            try:
+                version = await conn.fetchval(query)
             except asyncpg.UndefinedTableError:
                 return None
 

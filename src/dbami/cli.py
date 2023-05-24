@@ -109,13 +109,18 @@ class Arguments:
         args: argparse.Namespace,
     ) -> None:
         project: Optional[Path] = getattr(args, "project_directory", None)
+        svt: str = getattr(
+            args,
+            "schema_version_table",
+            SCHEMA_VERSION_TABLE,
+        )
 
         if project is None:
             args.db = DB
             return
 
         try:
-            args.db = DB(project)
+            args.db = DB(project, schema_version_table=svt)
         except FileNotFoundError:
             parser.error(
                 f"Project directoy does not appear to be valid: '{project}'",
