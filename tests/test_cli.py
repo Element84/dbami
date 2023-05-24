@@ -139,7 +139,6 @@ def test_drop_no_exist(tmp_db_name):
 
 
 def test_pending(tmp_db, project_dir):
-    print(list(project_dir.joinpath("migrations").glob("*.up.sql")))
     rc, out, err = run_cli("pending", "--database", tmp_db)
     print(out)
     print(err)

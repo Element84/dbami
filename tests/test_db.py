@@ -237,7 +237,6 @@ async def test_verify_different_version(project) -> None:
     assert not same
     output.seek(0)
     outstr = output.read()
-    print(outstr)
     assert outstr == "Version from schema doesn't match that from migrations: 4 != 5\n"
 
 

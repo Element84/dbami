@@ -46,9 +46,6 @@ async def test_pg_dump(tmp_db) -> None:
 
 @pytest.mark.asyncio
 async def test_pg_dump_custom_path(tmp_db) -> None:
-    import os
-
-    print(os.getcwd())
     rc, dump = await pg_dump(
         "compose",
         "exec",
