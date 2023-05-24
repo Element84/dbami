@@ -33,8 +33,8 @@ git commit -m "message" --no-verify
 
 ## Testing
 
-Tests are run using `pytest`. Put pytest python modules and other resource in
-the `/tests` directory.
+Tests are run using `pytest`. Put pytest python modules and other test
+resources in the `/tests` directory.
 
 ## Adding/updating dependencies
 
