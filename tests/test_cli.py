@@ -200,6 +200,35 @@ def test_migrate_noop(tmp_db, project_dir):
     assert rc == 0
 
 
+def test_migrate_different_version_table(tmp_db, project_dir):
+    try:
+        rc, out, err = run_cli(
+            "migrate",
+            "--database",
+            tmp_db,
+            "--schema-version-table",
+            "aschema.table",
+        )
+    except Exception as e:
+        print(e)
+    else:
+        print(out)
+        print(err)
+        assert rc == 0
+
+    rc, out, err = run_cli(
+        "current-schema",
+        "--database",
+        tmp_db,
+        "--schema-version-table",
+        "aschema.table",
+    )
+    print(out)
+    print(err)
+    assert rc == 0
+    assert out == "4\n"
+
+
 def test_migrate_bad_target(tmp_db, project_dir):
     target = 10
     with pytest.raises(exceptions.MigrationError) as exc_info:
@@ -332,13 +361,23 @@ def test_rollback_no_schema(tmp_db, project_dir):
 
 def test_up(tmp_db_name, project_dir):
     rc, out, err = run_cli(
-        "up", "--database", tmp_db_name, "--schema-version-table", "schema.table"
+        "up",
+        "--database",
+        tmp_db_name,
+        "--schema-version-table",
+        "schema.table",
     )
     print(out)
     print(err)
     assert rc == 0
 
-    rc, out, err = run_cli("current-schema", "--database", tmp_db_name)
+    rc, out, err = run_cli(
+        "current-schema",
+        "--database",
+        tmp_db_name,
+        "--schema-version-table",
+        "schema.table",
+    )
     print(out)
     print(err)
     assert rc == 0
