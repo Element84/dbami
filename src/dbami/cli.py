@@ -415,7 +415,7 @@ class Rollback(DbamiCommand):
                     direction="down",
                     database=args.database,
                 )
-            except exceptions.DirectionError as e:
+            except (exceptions.DirectionError, exceptions.MigrationError) as e:
                 printe(e)
                 return 1
             return 0
@@ -444,7 +444,7 @@ class Up(DbamiCommand):
 
             try:
                 await args.db.migrate(direction="up", database=args.database)
-            except exceptions.DirectionError as e:
+            except (exceptions.DirectionError, exceptions.MigrationError) as e:
                 printe(e)
                 return 1
             return 0

@@ -322,11 +322,11 @@ def test_rollback_bad_target(tmp_db, project_dir):
     assert rc == 0
 
     target = 5
-    with pytest.raises(exceptions.MigrationError) as exc_info:
-        run_cli("rollback", "--target", str(target), "--database", tmp_db)
-    assert (
-        str(exc_info.value) == f"Target migration ID '{target}' has no known migration"
-    )
+    rc, out, err = run_cli("rollback", "--target", str(target), "--database", tmp_db)
+    print(out)
+    print(err)
+    assert rc == 1
+    assert err == f"Target migration ID '{target}' has no known migration\n"
 
 
 def test_rollback_nonint_target(tmp_db, project_dir):
@@ -348,6 +348,23 @@ def test_rollback_wrong_direction(tmp_db, project_dir):
     assert (
         err
         == "Target would move version forward and direction is down: can't go 2 -> 4\n"
+    )
+
+
+def test_rollback_zero(tmp_db, project_dir):
+    DB(project_dir).migrations[0].down.path.touch()
+    rc, out, err = run_cli("migrate", "--target", "0", "--database", tmp_db)
+    print(out)
+    print(err)
+    assert rc == 0
+
+    rc, out, err = run_cli("rollback", "--database", tmp_db)
+    print(out)
+    print(err)
+    assert rc == 1
+    assert err == (
+        "Target migration ID '-1' would cause unsupported "
+        "rollback of base migration ID '0'\n"
     )
 
 
@@ -413,15 +430,6 @@ def test_verify_bad_pg_dump(tmp_db, project_dir):
     with pytest.raises(FileNotFoundError) as exc_info:
         run_cli("verify", "--pg-dump", "/bad/path")
     assert str(exc_info.value).startswith("pg_dump could not be located:")
-
-
-def test_verify_wrong_version(tmp_db, project_dir):
-    DB(project_dir).new_migration("new_migration")
-    rc, out, err = run_cli("verify")
-    print(out)
-    print(err)
-    assert rc == 1
-    assert err == "Version from schema doesn't match that from migrations: 4 != 5\n"
 
 
 def test_verify_schema_diff(tmp_db, project_dir):

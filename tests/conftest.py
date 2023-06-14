@@ -33,23 +33,9 @@ def project(tmp_chdir: Path):
     # to ensure we test the migration load process
     migrations_dir = DB.project_migrations(tmp_chdir)
     migrations_dir.mkdir()
-    migrations_dir.joinpath("00_migration.up.sql").touch()
-    migrations_dir.joinpath("00_migration.down.sql").touch()
+    migrations_dir.joinpath("00000_base.down.sql").touch()
     migrations_dir.joinpath("01_migration.up.sql").touch()
     db: DB = DB.new_project(tmp_chdir)
-    db.schema.path.write_text(
-        """
-CREATE TABLE IF NOT EXISTS schema_version (
-  version integer,
-  applied_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX ON schema_version (version);
-CREATE INDEX ON schema_version (applied_at);
-
-INSERT INTO schema_version (version) VALUES (4);
-"""
-    )
     db.new_migration("migration")
     db.new_migration("migration")
     db.new_migration("migration")
