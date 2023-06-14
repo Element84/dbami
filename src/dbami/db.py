@@ -162,6 +162,12 @@ class DB:
         self.validate_project()
         self.schema = SqlFile(self.schema_file)
         self.migrations = migrations_from_dir(self.migrations_dir)
+
+        if not self.migrations:
+            raise FileNotFoundError(
+                "Project is missing base migration file. Try reinitializing."
+            )
+
         self.fixtures = {
             f.name: f for f in (SqlFile(f) for f in self.fixtures_dir.glob("*.sql"))
         }
@@ -182,7 +188,9 @@ class DB:
     @classmethod
     def new_project(cls, directory: Path):
         cls.project_schema(directory).touch()
-        cls.project_migrations(directory).mkdir(exist_ok=True)
+        migrations = cls.project_migrations(directory)
+        migrations.mkdir(exist_ok=True)
+        migrations.joinpath("00000_base.up.sql").touch()
         cls.project_fixtures(directory).mkdir(exist_ok=True)
         return cls(directory)
 
@@ -299,7 +307,7 @@ class DB:
 
         async with AsyncExitStack() as stack:
             conn: asyncpg.Connection = kwargs.get(
-                "conn"
+                "conn",
             ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
             await conn.execute(sql)
 
@@ -313,11 +321,13 @@ class DB:
             ) or await stack.enter_async_context(self.get_db_connection(**kwargs))
 
             query, _ = render(
-                """SELECT
-version
-FROM :version_table
-WHERE applied_at = (SELECT max(applied_at) from :version_table)
-""",
+                """
+                SELECT
+                    version
+                FROM :version_table
+                WHERE
+                    applied_at = (SELECT max(applied_at) from :version_table)
+                """,
                 version_table=V(self.schema_version_table),
             )
 
@@ -340,7 +350,17 @@ WHERE applied_at = (SELECT max(applied_at) from :version_table)
             next_migration = next_migration.child
 
     async def load_schema(self, **kwargs):
-        await self.run_sqlfile(self.schema, **kwargs)
+        async with AsyncExitStack() as stack:
+            conn: asyncpg.Connection = kwargs.pop(
+                "conn",
+                None,
+            ) or await stack.enter_async_context(self.get_db_connection(**kwargs))
+            await stack.enter_async_context(conn.transaction())
+            await self.run_sqlfile(self.schema, conn=conn, **kwargs)
+            await self._update_schema_version(
+                max(self.migrations.keys()),
+                conn,
+            )
 
     async def load_fixture(self, fixture_name: str, **kwargs):
         try:
@@ -357,14 +377,14 @@ WHERE applied_at = (SELECT max(applied_at) from :version_table)
     ):
         table_sql, _ = render(
             """
-CREATE TABLE IF NOT EXISTS :version_table (
-    version integer,
-    applied_at timestamptz NOT NULL DEFAULT now()
-);
+            CREATE TABLE IF NOT EXISTS :version_table (
+                version integer,
+                applied_at timestamptz NOT NULL DEFAULT now()
+            );
 
-CREATE INDEX ON :version_table (version);
-CREATE INDEX ON :version_table (applied_at);
-""",
+            CREATE INDEX ON :version_table (version);
+            CREATE INDEX ON :version_table (applied_at);
+            """,
             version_table=V(self.schema_version_table),
         )
         version_sql, params = render(
@@ -398,9 +418,13 @@ CREATE INDEX ON :version_table (applied_at);
         if not self.migrations:
             return
 
+        min_migration = min(self.migrations.keys())
+
         async with self.get_db_connection(**kwargs) as conn:
             _version = await self.get_current_version(conn=conn)
-            schema_version: int = _version if _version is not None else -1
+            schema_version: int = (
+                _version if _version is not None else min_migration - 1
+            )
 
             if target is None:
                 target = max(self.migrations.keys())
@@ -417,6 +441,12 @@ CREATE INDEX ON :version_table (applied_at);
                 return
 
             if target not in self.migrations:
+                if target < min_migration:
+                    raise exceptions.MigrationError(
+                        f"Target migration ID '{target}' would cause unsupported "
+                        f"rollback of base migration ID '{min_migration}'"
+                    )
+
                 raise exceptions.MigrationError(
                     f"Target migration ID '{target}' has no known migration"
                 )
@@ -500,21 +530,17 @@ CREATE INDEX ON :version_table (applied_at);
         async def schema():
             await self.create_database(schema_db)
             await self.load_schema(database=schema_db)
-            version = await self.get_current_version(database=schema_db)
-            rc, dump = await _pg_dump("-d", schema_db, *dump_args, pg_dump=pg_dump)
-            return version, rc, dump
+            return await _pg_dump("-d", schema_db, *dump_args, pg_dump=pg_dump)
 
         async def migrate():
             await self.create_database(migrate_db)
             await self.migrate(database=migrate_db)
-            version = await self.get_current_version(database=migrate_db)
-            rc, dump = await _pg_dump("-d", migrate_db, *dump_args, pg_dump=pg_dump)
-            return version, rc, dump
+            return await _pg_dump("-d", migrate_db, *dump_args, pg_dump=pg_dump)
 
         try:
             results: tuple[
-                tuple[Optional[int], Optional[int], str],
-                tuple[Optional[int], Optional[int], str],
+                tuple[Optional[int], str],
+                tuple[Optional[int], str],
             ] = await asyncio.gather(schema(), migrate())
         finally:
             await self.drop_database(schema_db)
@@ -522,8 +548,8 @@ CREATE INDEX ON :version_table (applied_at);
 
         schema_results, migrate_results = results
 
-        schema_version, schema_rc, schema_dump = schema_results
-        migrate_version, migrate_rc, migrate_dump = migrate_results
+        schema_rc, schema_dump = schema_results
+        migrate_rc, migrate_dump = migrate_results
 
         if schema_rc != 0 or migrate_rc != 0:
             raise RuntimeError("Encoutered an error dumping databases")
@@ -541,14 +567,6 @@ CREATE INDEX ON :version_table (applied_at);
                     fromfile="schema.sql",
                     tofile="combined migrations",
                 )
-            )
-
-        if schema_version != migrate_version:
-            is_diff = True
-            print(
-                "Version from schema doesn't match that from migrations: "
-                f"{schema_version} != {migrate_version}",
-                file=output,
             )
 
         return not is_diff
