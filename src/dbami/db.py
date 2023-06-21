@@ -168,9 +168,7 @@ class DB:
                 "Project is missing base migration file. Try reinitializing."
             )
 
-        self.fixtures = {
-            f.name: f for f in (SqlFile(f) for f in self.fixtures_dir.glob("*.sql"))
-        }
+        self.fixtures = self.load_fixtures_from_dir(self.fixtures_dir)
         self.schema_version_table = schema_version_table
 
     @classmethod
@@ -205,6 +203,13 @@ class DB:
     @property
     def fixtures_dir(self):
         return self.project_fixtures(self.project_dir)
+
+    @staticmethod
+    def load_fixtures_from_dir(directory: Path) -> dict[str, SqlFile]:
+        return {f.name: f for f in (SqlFile(f) for f in directory.glob("*.sql"))}
+
+    def add_fixture_dir(self, directory: Path) -> None:
+        self.fixtures.update(self.load_fixtures_from_dir(directory))
 
     def validate_project(self):
         schema = self.schema_file

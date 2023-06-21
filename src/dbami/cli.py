@@ -103,6 +103,20 @@ class Arguments:
         )
 
     @classmethod
+    def fixture_path(cls, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--fixture-dir",
+            type=Path,
+            action="append",
+            default=[],
+            dest="fixture_dirs",
+            help=(
+                "directory from which to load sql fixtures; "
+                "later directories take precedence"
+            ),
+        )
+
+    @classmethod
     def process_project(
         cls,
         parser: argparse.ArgumentParser,
@@ -114,6 +128,7 @@ class Arguments:
             "schema_version_table",
             SCHEMA_VERSION_TABLE,
         )
+        fixture_dirs: list[Path] = getattr(args, "fixture_dirs", [])
 
         if project is None:
             args.db = DB
@@ -123,8 +138,11 @@ class Arguments:
             args.db = DB(project, schema_version_table=svt)
         except FileNotFoundError:
             parser.error(
-                f"Project directoy does not appear to be valid: '{project}'",
+                f"Project directory does not appear to be valid: '{project}'",
             )
+
+        for fixture_dir in fixture_dirs:
+            args.db.add_fixture_dir(fixture_dir)
 
 
 class EnvDefault(argparse.Action):
@@ -481,6 +499,45 @@ class Version(DbamiCommand):
         return 0
 
 
+class ListFixtures(DbamiCommand):
+    help: str = "List all available fixture files on search path"
+    name: str = "list-fixtures"
+
+    def set_args(
+        self,
+        parser: argparse.ArgumentParser,
+    ) -> None:
+        Arguments.project(parser)
+        Arguments.fixture_path(parser)
+
+    def __call__(self, args: argparse.Namespace) -> int:
+        for name, sqlfile in args.db.fixtures.items():
+            print(f"{name} ({sqlfile.path})")
+        return 0
+
+
+class LoadFixture(DbamiCommand):
+    help: str = "Load a sql fixture into the database"
+    name: str = "load-fixture"
+
+    def set_args(
+        self,
+        parser: argparse.ArgumentParser,
+    ) -> None:
+        Arguments.project(parser)
+        Arguments.fixture_path(parser)
+        Arguments.wait_timeout(parser)
+        Arguments.database(parser)
+        parser.add_argument("fixture_name", help="name of fixture to load")
+
+    def __call__(self, args: argparse.Namespace) -> int:
+        async def run() -> int:
+            await args.db.load_fixture(args.fixture_name, database=args.database)
+            return 0
+
+        return syncrun(run())
+
+
 class CLI(abc.ABC):
     def __init__(
         self,
@@ -545,6 +602,8 @@ class DbamiCLI(CLI):
             Up(),
             Verify(),
             Version(),
+            ListFixtures(),
+            LoadFixture(),
         )
     }
 
