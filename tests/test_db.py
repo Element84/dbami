@@ -277,3 +277,11 @@ def test_load_project_dir(project) -> None:
         child = child.child
 
     assert len(migrations) == expected_migration_count
+
+
+def test_add_fixture_dir(project, extra_fixtures) -> None:
+    project.add_fixture_dir(extra_fixtures)
+
+    assert len(project.fixtures) == 2
+    for fixture in project.fixtures.values():
+        assert fixture.path.parent == extra_fixtures

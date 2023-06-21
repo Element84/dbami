@@ -44,6 +44,17 @@ def project(tmp_chdir: Path):
 
 
 @pytest.fixture
+def extra_fixtures(tmp_path: Path) -> Path:
+    tfdir = tmp_path.joinpath("test_fixtures")
+    tfdir.mkdir()
+    # override the fixture in the project fixtures dir
+    tfdir.joinpath("a_fixture.sql").touch()
+    # add another fixture
+    tfdir.joinpath("b_fixture.sql").touch()
+    return tfdir
+
+
+@pytest.fixture
 def tmp_db(test_db_name_stem):
     db_name = random_name(test_db_name_stem)
 

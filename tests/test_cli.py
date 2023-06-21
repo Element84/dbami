@@ -451,3 +451,41 @@ def test_version():
     print(err)
     assert rc == 0
     assert out.strip().endswith(str(__version__))
+
+
+def test_list_fixtures(project_dir):
+    rc, out, err = run_cli("list-fixtures")
+    print(out)
+    print(err)
+    assert rc == 0
+    assert len(out.splitlines()) == 1
+    assert out.startswith("a_fixture (")
+
+
+def test_list_fixtures_extra(project_dir, extra_fixtures):
+    rc, out, err = run_cli("list-fixtures", "--fixture-dir", str(extra_fixtures))
+    print(out)
+    print(err)
+    assert rc == 0
+    assert len(out.splitlines()) == 2
+
+
+def test_load_fixture(tmp_db_name, project_dir):
+    rc, out, err = run_cli("load-fixture", "--database", tmp_db_name, "a_fixture")
+    print(out)
+    print(err)
+    assert rc == 0
+
+
+def test_load_fixtures_extra(tmp_db_name, project_dir, extra_fixtures):
+    rc, out, err = run_cli(
+        "load-fixture",
+        "--database",
+        tmp_db_name,
+        "--fixture-dir",
+        str(extra_fixtures),
+        "b_fixture",
+    )
+    print(out)
+    print(err)
+    assert rc == 0
