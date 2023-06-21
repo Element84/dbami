@@ -286,27 +286,7 @@ class DB:
                 await conn.close()
 
     @classmethod
-    async def create_database(cls, db_name: str, **kwargs) -> None:
-        async with AsyncExitStack() as stack:
-            kwargs["database"] = ""
-            conn: asyncpg.Connection = kwargs.get(
-                "conn"
-            ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
-            await conn.execute(f'CREATE DATABASE "{db_name}";')
-
-    @classmethod
-    async def drop_database(cls, db_name: str, **kwargs) -> None:
-        async with AsyncExitStack() as stack:
-            kwargs["database"] = ""
-            conn: asyncpg.Connection = kwargs.get(
-                "conn"
-            ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
-            await conn.execute(f'DROP DATABASE "{db_name}";')
-
-    @classmethod
-    async def run_sqlfile(cls, sqlfile: SqlFile, **kwargs) -> None:
-        sql = sqlfile.path.read_text()
-
+    async def execute_sql(cls, sql: str, **kwargs) -> None:
         if not sql:
             return
 
@@ -315,6 +295,20 @@ class DB:
                 "conn",
             ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
             await conn.execute(sql)
+
+    @classmethod
+    async def create_database(cls, db_name: str, **kwargs) -> None:
+        kwargs["database"] = ""
+        await cls.execute_sql(f'CREATE DATABASE "{db_name}";', **kwargs)
+
+    @classmethod
+    async def drop_database(cls, db_name: str, **kwargs) -> None:
+        kwargs["database"] = ""
+        await cls.execute_sql(f'DROP DATABASE "{db_name}";', **kwargs)
+
+    @classmethod
+    async def run_sqlfile(cls, sqlfile: SqlFile, **kwargs) -> None:
+        await cls.execute_sql(sqlfile.path.read_text(), **kwargs)
 
     async def get_current_version(
         self,
@@ -354,7 +348,7 @@ class DB:
             yield next_migration
             next_migration = next_migration.child
 
-    async def load_schema(self, **kwargs):
+    async def load_schema(self, **kwargs) -> None:
         async with AsyncExitStack() as stack:
             conn: asyncpg.Connection = kwargs.pop(
                 "conn",
