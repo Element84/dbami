@@ -8,7 +8,7 @@ import asyncpg
 import pytest
 
 from dbami import exceptions
-from dbami.cli import get_cli
+from dbami.__main__ import main as cli_main
 from dbami.db import DB
 from dbami.util import random_name, syncrun
 
@@ -29,7 +29,7 @@ def run_cli(*args, stdin: Optional[TextIO] = None):
     rc = None
     with replace_streams(stdin=stdin) as (out, err):
         try:
-            get_cli()(args)
+            cli_main(args)
         except SystemExit as e:
             rc = e.code
 
