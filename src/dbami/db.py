@@ -286,15 +286,17 @@ class DB:
                 await conn.close()
 
     @classmethod
-    async def execute_sql(cls, sql: str, **kwargs) -> None:
+    async def execute_sql(cls, sql: str, *query_params, **kwargs) -> None:
         if not sql:
+            # asyncpg chokes on an empty string,
+            # so we bail out early on any non-truthy sql
             return
 
         async with AsyncExitStack() as stack:
             conn: asyncpg.Connection = kwargs.get(
                 "conn",
             ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
-            await conn.execute(sql)
+            await conn.execute(sql, *query_params)
 
     @classmethod
     async def create_database(cls, db_name: str, **kwargs) -> None:
@@ -396,17 +398,17 @@ class DB:
             # use a subtransaction (save point) to prevent this
             # "expected" exception from rolling back the migration
             async with conn.transaction():
-                await conn.execute(table_sql)
+                await self.execute_sql(table_sql, conn=conn)
         except asyncpg.InvalidSchemaNameError:
             schema = self.schema_version_table.split(".")[0]
             schema_sql, _ = render(
                 "CREATE SCHEMA IF NOT EXISTS :schema",
                 schema=V(schema),
             )
-            await conn.execute(schema_sql)
-            await conn.execute(table_sql)
+            await self.execute_sql(schema_sql, conn=conn)
+            await self.execute_sql(table_sql, conn=conn)
 
-        await conn.execute(version_sql, *params)
+        await self.execute_sql(version_sql, *params, conn=conn)
 
     async def migrate(
         self,
