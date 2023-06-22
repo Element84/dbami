@@ -538,6 +538,26 @@ class LoadFixture(DbamiCommand):
         return syncrun(run())
 
 
+class ExecuteSql(DbamiCommand):
+    help: str = "Run SQL from stdin against the database"
+    name: str = "execute-sql"
+
+    def set_args(
+        self,
+        parser: argparse.ArgumentParser,
+    ) -> None:
+        Arguments.project(parser)
+        Arguments.wait_timeout(parser)
+        Arguments.database(parser)
+
+    def __call__(self, args: argparse.Namespace) -> int:
+        async def run() -> int:
+            await args.db.execute_sql(sys.stdin.read(), database=args.database)
+            return 0
+
+        return syncrun(run())
+
+
 class CLI(abc.ABC):
     def __init__(
         self,
@@ -604,6 +624,7 @@ class DbamiCLI(CLI):
             Version(),
             ListFixtures(),
             LoadFixture(),
+            ExecuteSql(),
         )
     }
 

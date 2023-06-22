@@ -476,3 +476,20 @@ def test_load_fixtures_extra(tmp_db, project_dir, extra_fixtures):
     print(out)
     print(err)
     assert rc == 0
+
+
+def test_execute_sql(tmp_db, project):
+    stdin = io.StringIO()
+    stdin.write("create table a_table (id int primary key);")
+    stdin.seek(0)
+    rc, out, err = run_cli(
+        "execute-sql",
+        "--database",
+        tmp_db,
+        stdin=stdin,
+    )
+    print(out)
+    print(err)
+    assert rc == 0
+    syncrun(project.execute_sql("select * from a_table", database=tmp_db))
+    assert True
