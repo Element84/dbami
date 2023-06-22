@@ -10,7 +10,7 @@ import pytest
 from dbami import exceptions
 from dbami.__main__ import main as cli_main
 from dbami.db import DB
-from dbami.util import random_name, syncrun
+from dbami.util import syncrun
 
 
 @contextlib.contextmanager
@@ -50,19 +50,6 @@ async def database_exists(dbname) -> bool:
 @pytest.fixture
 def project_dir(project: DB) -> Path:
     return project.project_dir
-
-
-@pytest.fixture
-def tmp_db_name():
-    db_name = random_name("dbami_test")
-
-    try:
-        yield db_name
-    finally:
-        try:
-            syncrun(DB.drop_database(db_name))
-        except asyncpg.InvalidCatalogNameError:
-            pass
 
 
 def test_cli():
@@ -470,18 +457,18 @@ def test_list_fixtures_extra(project_dir, extra_fixtures):
     assert len(out.splitlines()) == 2
 
 
-def test_load_fixture(tmp_db_name, project_dir):
-    rc, out, err = run_cli("load-fixture", "--database", tmp_db_name, "a_fixture")
+def test_load_fixture(tmp_db, project_dir):
+    rc, out, err = run_cli("load-fixture", "--database", tmp_db, "a_fixture")
     print(out)
     print(err)
     assert rc == 0
 
 
-def test_load_fixtures_extra(tmp_db_name, project_dir, extra_fixtures):
+def test_load_fixtures_extra(tmp_db, project_dir, extra_fixtures):
     rc, out, err = run_cli(
         "load-fixture",
         "--database",
-        tmp_db_name,
+        tmp_db,
         "--fixture-dir",
         str(extra_fixtures),
         "b_fixture",

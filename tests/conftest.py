@@ -5,7 +5,7 @@ import asyncpg
 import pytest
 
 from dbami.db import DB
-from dbami.util import random_name, syncrun
+from dbami.util import syncrun
 
 
 @pytest.fixture(scope="session")
@@ -40,6 +40,7 @@ def project(tmp_chdir: Path):
     db.new_migration("migration")
     db.new_migration("migration")
     db.new_fixture("a_fixture")
+    db.fixtures["a_fixture"].path.write_text("select current_database();")
     return db
 
 
@@ -48,21 +49,28 @@ def extra_fixtures(tmp_path: Path) -> Path:
     tfdir = tmp_path.joinpath("test_fixtures")
     tfdir.mkdir()
     # override the fixture in the project fixtures dir
-    tfdir.joinpath("a_fixture.sql").touch()
+    tfdir.joinpath("a_fixture.sql").write_text("select current_database();")
     # add another fixture
-    tfdir.joinpath("b_fixture.sql").touch()
+    tfdir.joinpath("b_fixture.sql").write_text("select current_database();")
     return tfdir
 
 
 @pytest.fixture
-def tmp_db(test_db_name_stem):
-    db_name = random_name(test_db_name_stem)
+def tmp_db_name(test_db_name_stem: str, request):
+    db_name = (
+        f"{test_db_name_stem}_{request.module.__name__}:{request.function.__name__}"
+    )
 
     try:
-        syncrun(DB.create_database(db_name))
         yield db_name
     finally:
         try:
             syncrun(DB.drop_database(db_name))
         except asyncpg.InvalidCatalogNameError:
             pass
+
+
+@pytest.fixture
+def tmp_db(tmp_db_name: str):
+    syncrun(DB.create_database(tmp_db_name))
+    return tmp_db_name
