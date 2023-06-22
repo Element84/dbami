@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `list-fixtures` command ([#10])
 - `load-fixture` command ([#10])
 - `DB.execute_sql()` method for running arbitrary SQL against a database ([#10])
+- `execute-sql` command ([#10])
 
 ### Changed
 
