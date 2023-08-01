@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import sys
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator, Literal, Optional, TextIO, Union
 
@@ -279,8 +279,11 @@ class DB:
     async def get_db_connection(**kwargs):
         conn = None
         try:
-            conn = await asyncpg.connect(**kwargs)
-            yield conn
+            if kwargs.get("conn"):
+                yield kwargs["conn"]
+            else:
+                conn = await asyncpg.connect(**kwargs)
+                yield conn
         finally:
             if conn:
                 await conn.close()
@@ -292,10 +295,7 @@ class DB:
             # so we bail out early on any non-truthy sql
             return
 
-        async with AsyncExitStack() as stack:
-            conn: asyncpg.Connection = kwargs.get(
-                "conn",
-            ) or await stack.enter_async_context(cls.get_db_connection(**kwargs))
+        async with cls.get_db_connection(**kwargs) as conn:
             await conn.execute(sql, *query_params)
 
     @classmethod
@@ -316,11 +316,7 @@ class DB:
         self,
         **kwargs,
     ) -> Optional[int]:
-        async with AsyncExitStack() as stack:
-            conn: asyncpg.Connection = kwargs.get(
-                "conn"
-            ) or await stack.enter_async_context(self.get_db_connection(**kwargs))
-
+        async with self.get_db_connection(**kwargs) as conn:
             query, _ = render(
                 """
                 SELECT
@@ -351,17 +347,13 @@ class DB:
             next_migration = next_migration.child
 
     async def load_schema(self, **kwargs) -> None:
-        async with AsyncExitStack() as stack:
-            conn: asyncpg.Connection = kwargs.pop(
-                "conn",
-                None,
-            ) or await stack.enter_async_context(self.get_db_connection(**kwargs))
-            await stack.enter_async_context(conn.transaction())
-            await self.run_sqlfile(self.schema, conn=conn, **kwargs)
-            await self._update_schema_version(
-                max(self.migrations.keys()),
-                conn,
-            )
+        async with self.get_db_connection(**kwargs) as conn:
+            async with conn.transaction():
+                await self.run_sqlfile(self.schema, conn=conn)
+                await self._update_schema_version(
+                    max(self.migrations.keys()),
+                    conn,
+                )
 
     async def load_fixture(self, fixture_name: str, **kwargs):
         try:

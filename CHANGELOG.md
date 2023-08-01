@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v0.3.0] - 2023-08-01
+
+### Changed
+
+- Connection reuse support extracted into `get_db_connection`, now all
+  invocations of `get_db_connection` automatically support connection reuse.
+  ([#11])
+
 ## [v0.2.0] - 2023-06-22
 
 ### Added
@@ -25,8 +33,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 Initial release
 
-[unreleased]: https://github.com/element84/dbami/compare/v0.2.0...main
+[unreleased]: https://github.com/element84/dbami/compare/v0.3.0...main
+[v0.3.0]: https://github.com/element84/dbami/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/element84/dbami/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/element84/dbami/tree/v0.1.0
 
 [#10]: https://github.com/Element84/dbami/pull/10
+[#11]: https://github.com/Element84/dbami/pull/11
