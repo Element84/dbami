@@ -25,6 +25,7 @@ jobs:
 
       - name: Snyk Python report vulnerabilities
         uses: snyk/actions/python@master
+        continue-on-error: true # To make sure that SARIF upload gets called
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -34,8 +35,17 @@ jobs:
             --severity-threshold=high # Forces fail on high-severity vulnerabilities
 
         # Push the Snyk Code results into GitHub Code Scanning tab
-      - name: Upload python scan result to GitHub Code Scanning
+      - name: Upload result to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v2
-        if: success() || failure()
         with:
           sarif_file: snyk.sarif
+
+      - name: Snyk Python gatekeeper
+        uses: snyk/actions/python@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args:
+            --sarif-file-output=snyk.sarif
+            --policy-path=.snyk
+            --severity-threshold=high # Forces fail on high-severity vulnerabilities
