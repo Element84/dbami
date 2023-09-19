@@ -29,10 +29,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args:
-            --sarif-file-output=snyk.sarif
-            --policy-path=.snyk
-            --severity-threshold=high # Forces fail on high-severity vulnerabilities
+          args: --sarif-file-output=snyk.sarif
 
         # Push the Snyk Code results into GitHub Code Scanning tab
       - name: Upload result to GitHub Code Scanning
