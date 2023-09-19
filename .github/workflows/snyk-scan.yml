@@ -25,7 +25,6 @@ jobs:
 
       - name: Snyk Python report vulnerabilities
         uses: snyk/actions/python@master
-        if: success() || failure()
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
