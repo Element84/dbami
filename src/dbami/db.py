@@ -1,7 +1,9 @@
 import asyncio
 import logging
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from contextlib import suppress as cl_suppress
 from pathlib import Path
 from typing import AsyncGenerator, Literal, Optional, TextIO, Union
 
@@ -261,7 +263,7 @@ class DB:
             parent=self.migrations.get(_id - 1),
         )
 
-    def new_fixture(self, name: str, content: str = ""):
+    def new_fixture(self, name: str, content: str = "") -> None:
         f = self.fixtures_dir.joinpath(f"{name}.sql")
 
         if f.exists():
@@ -276,17 +278,21 @@ class DB:
 
     @staticmethod
     @asynccontextmanager
-    async def get_db_connection(**kwargs):
-        conn = None
+    async def get_db_connection(
+        conn: Optional[asyncpg.Connection] = None,
+        **kwargs,
+    ) -> AsyncIterator[asyncpg.Connection]:
+        if conn:
+            yield conn
+            return
+
         try:
-            if kwargs.get("conn"):
-                yield kwargs["conn"]
-            else:
-                conn = await asyncpg.connect(**kwargs)
-                yield conn
+            _conn: asyncpg.Connection = await asyncpg.connect(**kwargs)
+            yield _conn
         finally:
-            if conn:
-                await conn.close()
+            with cl_suppress(UnboundLocalError):
+                # we know _conn might be unbound so we ignore the type error
+                await _conn.close()  # type: ignore
 
     @classmethod
     async def execute_sql(cls, sql: str, *query_params, **kwargs) -> None:
@@ -367,7 +373,7 @@ class DB:
         self,
         version: int,
         conn,
-    ):
+    ) -> None:
         table_sql, _ = render(
             """
             CREATE TABLE IF NOT EXISTS :version_table (
@@ -407,7 +413,7 @@ class DB:
         target: Optional[int] = None,
         direction: Union[Literal["up"], Literal["down"], None] = None,
         **kwargs,
-    ):
+    ) -> None:
         if not self.migrations:
             return
 
@@ -509,8 +515,7 @@ class DB:
     ) -> bool:
         from dbami.pg_dump import pg_dump as _pg_dump
 
-        if output is None:
-            output = sys.stderr
+        _output = sys.stderr if output is None else output
 
         schema_db = random_name("dbami_verify_schema")
         migrate_db = random_name("dbami_verify_migrate")
@@ -553,7 +558,7 @@ class DB:
             import difflib
 
             is_diff = True
-            output.writelines(
+            _output.writelines(
                 difflib.unified_diff(
                     schema_dump.splitlines(keepends=True),
                     migrate_dump.splitlines(keepends=True),
