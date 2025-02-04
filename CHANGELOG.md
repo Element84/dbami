@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v0.3.1] - 2025-02-04
+
+### Added
+
+- Type annotations on some DB functions ([#13])
+
 ## [v0.3.0] - 2023-08-01
 
 ### Changed
@@ -40,3 +46,4 @@ Initial release
 
 [#10]: https://github.com/Element84/dbami/pull/10
 [#11]: https://github.com/Element84/dbami/pull/11
+[#13]: https://github.com/Element84/dbami/pull/13
