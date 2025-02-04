@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:15
+    image: postgres:16
     restart: always
     environment:
       POSTGRES_PASSWORD: "${PGPASSWORD:-password}"
@@ -13,5 +11,5 @@ services:
     ports:
       - "${PGPORT:-5432}:5432"
     volumes:
-      - "./:/swoop"
-    working_dir: "/swoop"
+      - "./:/dbami"
+    working_dir: "/dbami"
