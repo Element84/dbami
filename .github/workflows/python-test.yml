@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Load .env file into environment
         uses: cardinalby/export-env-action@v2
@@ -44,7 +44,7 @@ jobs:
         run: docker compose up -d
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -58,9 +58,8 @@ jobs:
           pip install -r requirements.txt
           pip install '.[dev]'
 
-      - name: Lint with ruff
-        run: |
-          ruff check .
+      - name: pre-commit
+        run: pre-commit run --all-files
 
       - name: Test with pytest
         run: |
@@ -68,7 +67,10 @@ jobs:
           pytest tests/test_cleanup.py
 
       - name: "Upload coverage to Codecov"
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           fail_ci_if_error: true
           verbose: true
+        if: matrix.python-version == '3.13'
