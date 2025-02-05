@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Type annotations on some DB functions ([#13])
 
+### Changed
+
+- pre-commit minimum version now 4.0 ([#13])
+
 ## [v0.3.0] - 2023-08-01
 
 ### Changed
