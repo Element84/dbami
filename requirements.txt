@@ -4,9 +4,11 @@
 #
 #    pip-compile --extra=snyk
 #
-asyncpg==0.27.0
+async-timeout==5.0.1
+    # via asyncpg
+asyncpg==0.30.0
     # via dbami (pyproject.toml)
 buildpg==0.4
     # via dbami (pyproject.toml)
-typing-extensions==4.5.0
+typing-extensions==4.12.2
     # via dbami (pyproject.toml)
