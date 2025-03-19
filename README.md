@@ -6,7 +6,7 @@ migration tool.
 ## What does `dbami` mean?
 
 `dbami` was initially inspired by the tool
-[`dbmate`](https://gitbub.com/amacneil/dbmate), and therefore takes inspiration
+[`dbmate`](https://github.com/amacneil/dbmate), and therefore takes inspiration
 from `dbmate` when it comes to name. That is, "ami" is French for "friend," a
 synonym of "mate."
 
