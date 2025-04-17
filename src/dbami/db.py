@@ -233,8 +233,12 @@ class DB:
                 f"Fixtures directory is not a directory: {migrations}",
             )
 
-    def next_migration_id(self):
-        return max(self.migrations.keys()) + 1 if self.migrations else 0
+    def current_migration_id(self) -> Optional[int]:
+        return max(self.migrations.keys()) if self.migrations else None
+
+    def next_migration_id(self) -> int:
+        current = self.current_migration_id()
+        return current + 1 if current else 0
 
     def new_migration(
         self,
@@ -357,7 +361,7 @@ class DB:
             async with conn.transaction():
                 await self.run_sqlfile(self.schema, conn=conn)
                 await self._update_schema_version(
-                    max(self.migrations.keys()),
+                    self.current_migration_id(),
                     conn,
                 )
 
