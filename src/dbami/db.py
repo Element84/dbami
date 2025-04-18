@@ -16,6 +16,8 @@ from dbami.util import random_name
 
 logger = logging.getLogger(__name__)
 
+DBAMI_LOCK_ID = 4562341
+
 
 class SqlFile:
     def __init__(self, path: Path):
@@ -412,10 +414,41 @@ class DB:
 
         await self.execute_sql(version_sql, *params, conn=conn)
 
+    @asynccontextmanager
+    async def migration_lock(
+        self,
+        use_lock: bool = True,
+        **kwargs,
+    ) -> AsyncIterator[asyncpg.Connection]:
+        async with self.get_db_connection(**kwargs) as conn:
+            if not use_lock:
+                yield conn
+                return
+
+            lock_query, lock_params = render(
+                """
+                SELECT pg_advisory_lock(:dbami_lock_id, to_regclass(:version_table)::oid::integer)
+                """,
+                dbami_lock_id=DBAMI_LOCK_ID,
+                version_table=self.schema_version_table,
+            )
+            unlock_query, unlock_params = render(
+                """
+                SELECT pg_advisory_lock(:dbami_lock_id, to_regclass(:version_table)::oid::integer)
+                """,
+                dbami_lock_id=DBAMI_LOCK_ID,
+                version_table=self.schema_version_table,
+            )
+
+            await self.execute_sql(lock_query, *lock_params, conn=conn)
+            yield conn
+            await self.execute_sql(unlock_query, *unlock_params, conn=conn)
+
     async def migrate(
         self,
         target: Optional[int] = None,
         direction: Union[Literal["up"], Literal["down"], None] = None,
+        use_lock: bool = True,
         **kwargs,
     ) -> None:
         if not self.migrations:
@@ -423,7 +456,7 @@ class DB:
 
         min_migration = min(self.migrations.keys())
 
-        async with self.get_db_connection(**kwargs) as conn:
+        async with self.migration_lock(use_lock=use_lock, **kwargs) as conn:
             _version = await self.get_current_version(conn=conn)
             schema_version: int = (
                 _version if _version is not None else min_migration - 1

@@ -60,6 +60,7 @@ class MigrationHelperConfig:
     connection_wait_max_attempts: Optional[int] = None
     force_close_connections_after_wait: bool = False
     force_close_connections_timeout_ms: int = 10000
+    use_migration_lock: bool = True
 
     def __post_init__(self) -> None:
         if self.connection_wait_poll_interval_ms < 100:
@@ -162,7 +163,10 @@ class MigrationHelper:
 
 
     async def apply_migrations(self) -> None:
-        async with self.database.get_db_connection(**self.connect_kwargs) as conn:
+        async with self.database.migration_lock(
+            use_lock=self.config.use_migration_lock,
+            **self.connect_kwargs,
+        ) as conn:
             ## NEED TO LOCK ON THE MIGRATION TABLE
             try:
                 current_version = await self.database.get_current_version(conn=conn)
