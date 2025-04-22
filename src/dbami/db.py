@@ -362,10 +362,11 @@ class DB:
         async with self.get_db_connection(**kwargs) as conn:
             async with conn.transaction():
                 await self.run_sqlfile(self.schema, conn=conn)
-                await self._update_schema_version(
-                    self.current_migration_id(),
-                    conn,
-                )
+                if current_migration_id := self.current_migration_id is not None:
+                    await self._update_schema_version(
+                        current_migration_id,
+                        conn,
+                    )
 
     async def load_fixture(self, fixture_name: str, **kwargs):
         try:
@@ -418,6 +419,7 @@ class DB:
     async def migration_lock(
         self,
         use_lock: bool = True,
+        timeout_ms: int = 30000,
         **kwargs,
     ) -> AsyncIterator[asyncpg.Connection]:
         async with self.get_db_connection(**kwargs) as conn:
@@ -427,14 +429,20 @@ class DB:
 
             lock_query, lock_params = render(
                 """
-                SELECT pg_advisory_lock(:dbami_lock_id, to_regclass(:version_table)::oid::integer)
+                DO $_$
+                    BEGIN
+                        SET lock_timeout = :timeout_ms;
+                        PERFORM pg_advisory_lock(:dbami_lock_id, to_regclass(':version_table')::oid::integer);
+                    END
+                $_$;
                 """,
+                timeout_ms=timeout_ms,
                 dbami_lock_id=DBAMI_LOCK_ID,
                 version_table=self.schema_version_table,
             )
             unlock_query, unlock_params = render(
                 """
-                SELECT pg_advisory_lock(:dbami_lock_id, to_regclass(:version_table)::oid::integer)
+                SELECT pg_advisory_unlock(:dbami_lock_id, to_regclass(':version_table')::oid::integer)
                 """,
                 dbami_lock_id=DBAMI_LOCK_ID,
                 version_table=self.schema_version_table,

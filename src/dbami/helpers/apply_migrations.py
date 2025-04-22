@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -7,6 +8,7 @@ import asyncpg
 from buildpg import V, render
 
 from dbami.db import DB
+from dbami.exceptions import MigrationError
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +27,15 @@ class MigrationHelperConfig:
     # migration version this must be True to roll back.
     do_rollback: bool = False
 
+    # Timeout in milliseconds to acquire a lock to prevent other migrations from running
+    # at the same time. A value of 0 disables the timeout and the wait for a lock will
+    # continue indefinitely.
+    advisory_lock_acquisition_timeout_ms: int = 30000
+
     # Wait for other connections to close before running migrations.
     #
     #   connection_wait_poll_interval_ms (int)
-    #     The polling interval on the connection check query, in miliseconds.
+    #     The polling interval on the connection check query, in milliseconds.
     #
     #     This setting has no function if connection_wait_max_attempts is set
     #     to a value less than or equal to 0.
@@ -48,7 +55,7 @@ class MigrationHelperConfig:
     #
     #   force_close_connections_timeout_ms (int)
     #     A positive integer value limits the wait time for connections to
-    #     close to the provided value, in miliseconds. If any connections do
+    #     close to the provided value, in milliseconds. If any connections do
     #     not close before the timeout the script will error and exit.
     #
     #     A value less than or equal to 0 will disable the wait and the force
@@ -91,7 +98,6 @@ class MigrationHelper:
 
         self.config = helper_config
 
-
     async def grant_connect_privileges(
         self,
         conn: asyncpg.Connection,
@@ -100,17 +106,16 @@ class MigrationHelper:
             self.logger.warning("Granting connect privileges for role '%s'", role_name)
             q, p = render(
                 """
-                    DO $_$
-                        BEGIN
-                            EXECUTE FORMAT('GRANT CONNECT on database %s TO :role',
-                            CURRENT_DATABASE());
-                        END
-                    $_$;
+                DO $_$
+                    BEGIN
+                        EXECUTE FORMAT('GRANT CONNECT on database %s TO :role',
+                        CURRENT_DATABASE());
+                    END
+                $_$;
                 """,
                 role=V(role_name),
             )
             await conn.execute(q, *p)
-
 
     async def revoke_connect_privileges(
         self,
@@ -120,76 +125,137 @@ class MigrationHelper:
             self.logger.warning("Revoking connect privileges for role '%s'", role_name)
             q, p = render(
                 """
-                    DO $_$
-                        BEGIN
-                            EXECUTE FORMAT('REVOKE CONNECT on database %s FROM :role',
-                            CURRENT_DATABASE());
-                        END
-                    $_$;
+                DO $_$
+                    BEGIN
+                        EXECUTE FORMAT('REVOKE CONNECT on database %s FROM :role',
+                        CURRENT_DATABASE());
+                    END
+                $_$;
                 """,
                 role=V(role_name),
             )
             await conn.execute(q, *p)
 
+    async def force_close_connections(
+        self,
+        conn: asyncpg.Connection,
+    ) -> None:
+        for role_name in self.config.revoke_connect_on_roles_names:
+            self.logger.warning("Force closing connections for role '%s'", role_name)
+            q, p = render(
+                """
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE usename = :role AND datname = current_database()
+                """,
+                role=V(role_name),
+            )
+            await conn.execute(q, *p)
 
     async def active_connections_exist(self, conn: asyncpg.Connection) -> bool:
         return bool(
             await conn.fetchval(
                 """
-            SELECT EXISTS(
-                SELECT * FROM pg_stat_activity
-                WHERE
-                    datname = current_database()
-                    AND pid != pg_backend_pid()
-            )
-            """,
+                SELECT EXISTS(
+                    SELECT * FROM pg_stat_activity
+                    WHERE
+                        datname = current_database()
+                        AND pid != pg_backend_pid()
+                        AND usename != current_user
+                )
+                """,
             )
         )
-
 
     async def wait_for_other_connections_to_close(
         self,
         conn: asyncpg.Connection,
         poll_interval_ms: int = 2000,
-    ) -> None:
+        max_attempts: Optional[int] = None,
+    ) -> bool:
         if poll_interval_ms < 100:
             logger.warning("Cowardly refusing to wait less than 100ms.")
             poll_interval_ms = 100
 
         await self.revoke_connect_privileges(conn)
 
+        attempts = 0
         while await self.active_connections_exist(conn):
-            time.sleep(poll_interval_ms)
+            if max_attempts is not None and attempts >= max_attempts:
+                self.logger.warning(
+                    "Max polling attempts reached, existing connections still open."
+                )
+                return False
+            await asyncio.sleep(poll_interval_ms / 1000)
+            attempts += 1
 
+        return True
+
+    async def force_other_connections_to_close(
+        self,
+        conn: asyncpg.Connection,
+        timeout_ms: int = 10000,
+    ) -> None:
+        await self.force_close_connections(conn)
+
+        if timeout_ms <= 0:
+            return
+
+        start_time = time.time()
+        while await self.active_connections_exist(conn):
+            if time.time() - start_time > timeout_ms / 1000:
+                raise MigrationError(
+                    "Timeout waiting for connections to close after force close."
+                )
+            await asyncio.sleep(0.1)
 
     async def apply_migrations(self) -> None:
         async with self.database.migration_lock(
             use_lock=self.config.use_migration_lock,
             **self.connect_kwargs,
         ) as conn:
-            ## NEED TO LOCK ON THE MIGRATION TABLE
+            if self.config.target_migration_version is None:
+                if not self.database.migrations:
+                    raise MigrationError(
+                        "No migrations exist, there is nothing to apply"
+                    )
+                self.config.target_migration_version = max(
+                    self.database.migrations.keys()
+                )
+
+            current_version = await self.database.get_current_version(conn=conn)
+
+            if (
+                current_version is not None
+                and current_version == self.config.target_migration_version
+            ):
+                self.logger.info(
+                    "No migration required, already running target version"
+                )
+                return
+
             try:
-                current_version = await self.database.get_current_version(conn=conn)
-
-                ## TODO: need some way to validate target version if target version is None
-                ## probably just need to set it here if it is none, well, before getting
-                ## the current version and error out if it is does not resolve a value
-                if current_version is None:
-
-
-                if (
-                    current_version is not None
-                    and current_version == self.config.target_migration_version
-                ):
-                    self.logger.info("No migration required, already running target version")
-                    return
-
                 if self.config.wait_for_other_connections_to_close:
-                    self.logger.info("Waiting on all connections to close before migrating...")
-                    await self.wait_for_other_connections_to_close(
+                    self.logger.info(
+                        "Waiting on all connections to close before migrating..."
+                    )
+                    conns_closed = await self.wait_for_other_connections_to_close(
                         conn,
                         poll_interval_ms=self.config.connection_wait_poll_interval_ms,
+                        max_attempts=self.config.connection_wait_max_attempts,
                     )
+
+                    if (
+                        not conns_closed
+                        and self.config.force_close_connections_after_wait
+                    ):
+                        self.logger.info(
+                            "Forcing all connections to close before migrating..."
+                        )
+                        await self.force_other_connections_to_close(
+                            conn,
+                            timeout_ms=self.config.force_close_connections_timeout_ms,
+                        )
 
                 direction: Literal["up", "down"]
                 if self.config.do_rollback:
