@@ -1,1 +1,2 @@
 SCHEMA_VERSION_TABLE = "schema_version"
+DBAMI_LOCK_ID = 4562341
