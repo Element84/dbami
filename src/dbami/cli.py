@@ -31,6 +31,18 @@ def target_type(val: Any, default_label: str) -> int:
     return val
 
 
+def positive_int(val: Any) -> int:
+    try:
+        int_val = int(val)
+    except ValueError:
+        raise argparse.ArgumentTypeError("invalid integer value")
+
+    if int_val < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative integer")
+
+    return int_val
+
+
 class Arguments:
     env_prefix: str = DEFAULT_ENV_PREFIX
 
@@ -90,6 +102,29 @@ class Arguments:
             default=default_label,
             type=lambda x: target_type(x, default_label),
             help=f"(default: '{default_label}')",
+        )
+
+    @classmethod
+    def no_lock(
+        cls,
+        parser: argparse.ArgumentParser,
+    ) -> None:
+        parser.add_argument(
+            "--no-lock",
+            action="store_true",
+            help="do not lock db access during migration",
+        )
+
+    @classmethod
+    def lock_timeout(
+        cls,
+        parser: argparse.ArgumentParser,
+    ) -> None:
+        parser.add_argument(
+            "--lock-timeout",
+            default=0,
+            type=positive_int,
+            help="seconds to wait for db lock; 0 waits indefinitely",
         )
 
     @classmethod
@@ -382,14 +417,20 @@ class Migrate(DbamiCommand):
         Arguments.database(parser)
         Arguments.migration_target(parser, "latest")
         Arguments.version_table(parser)
+        Arguments.no_lock(parser)
+        Arguments.lock_timeout(parser)
 
     def __call__(self, args: argparse.Namespace) -> int:
         async def run() -> int:
             target: Optional[int] = None if args.target == -1 else args.target
+            use_lock = not args.no_lock
+            timeout_ms = args.lock_timeout * 1000
             try:
                 await args.db.migrate(
                     target=target,
                     direction="up",
+                    use_lock=use_lock,
+                    timeout_ms=timeout_ms,
                     database=args.database,
                 )
             except exceptions.DirectionError as e:

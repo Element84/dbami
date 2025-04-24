@@ -460,17 +460,17 @@ class DB:
 
             try:
                 await self.execute_sql(lock_query, conn=conn)
-            except asyncpg.exceptions.LockNotAvailableError as e:
+            except asyncpg.exceptions.LockNotAvailableError:
                 raise exceptions.LockError(
-                    "Unable to acquire a migration lock, another migration may be in "
-                    "progress."
-                ) from e
+                    "Unable to acquire a migration lock because it is held by another "
+                    "user."
+                )
             except asyncpg.exceptions.RaiseError as e:
                 if "Schema version table does not exist" in str(e):
                     raise exceptions.LockError(
-                        "Unable to acquire a migration lock, schema version table "
-                        f"'{self.schema_version_table}' does not exist."
-                    ) from e
+                        "Unable to acquire a migration lock because schema version "
+                        f"table '{self.schema_version_table}' does not exist."
+                    )
             yield conn
             await self.execute_sql(unlock_query, *unlock_params, conn=conn)
 

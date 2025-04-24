@@ -59,7 +59,7 @@ class MigrationHelperConfig:
     target_migration_version: Optional[int] = None
     do_rollback: bool = False
     use_migration_lock: bool = True
-    migration_lock_acquisition_timeout_ms: int = 30000
+    migration_lock_acquisition_timeout_ms: int = 10000
     revoke_connect_on_role_names: Sequence[str] = field(default_factory=list)
     connection_wait_max_polls: Optional[int] = None
     connection_wait_poll_interval_ms: int = 2000
