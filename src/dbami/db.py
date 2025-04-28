@@ -238,7 +238,7 @@ class DB:
 
     def next_migration_id(self) -> int:
         current = self.current_migration_id()
-        return current + 1 if current else 0
+        return current + 1 if current is not None else 0
 
     def new_migration(
         self,
