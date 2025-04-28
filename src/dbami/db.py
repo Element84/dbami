@@ -360,7 +360,7 @@ class DB:
         async with self.get_db_connection(**kwargs) as conn:
             async with conn.transaction():
                 await self.run_sqlfile(self.schema, conn=conn)
-                if current_migration_id := self.current_migration_id is not None:
+                if (current_migration_id := self.current_migration_id()) is not None:
                     await self._update_schema_version(
                         current_migration_id,
                         conn,
