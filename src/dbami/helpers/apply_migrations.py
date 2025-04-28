@@ -1,13 +1,13 @@
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence, Type
 
 import asyncpg
 from buildpg import V, Values, render
 
-from dbami.db import DB
 from dbami.exceptions import MigrationError
+from dbami.helpers.helper import Helper
 
 logger = logging.getLogger(__name__)
 
@@ -76,22 +76,10 @@ class MigrationHelperConfig:
         )
 
 
-class MigrationHelper:
-    def __init__(
-        self,
-        database: DB,
-        helper_config: Optional[MigrationHelperConfig] = None,
-        logger: logging.Logger = logger,
-        **connect_kwargs,
-    ) -> None:
-        self.database = database
-        self.logger = logger
-        self.connect_kwargs = connect_kwargs
-
-        if helper_config is None:
-            helper_config = MigrationHelperConfig()
-
-        self.config = helper_config
+class MigrationHelper(Helper[MigrationHelperConfig]):
+    @classmethod
+    def get_config_class(cls) -> Type[MigrationHelperConfig]:
+        return MigrationHelperConfig
 
     async def wait_for_other_connections_to_close(
         self,
