@@ -10,12 +10,12 @@ T = TypeVar("T")
 class Helper(abc.ABC, Generic[T]):
     def __init__(
         self,
-        database: DB,
+        dbami_db: DB,
         logger: logging.Logger,
         helper_config: Optional[T] = None,
         **connect_kwargs,
     ) -> None:
-        self.database = database
+        self.database = dbami_db
         self.logger = logger
         self.connect_kwargs = connect_kwargs
 

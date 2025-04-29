@@ -210,7 +210,7 @@ async def revoke_connect_privileges(
                 """
                 DO $_$
                     BEGIN
-                        EXECUTE FORMAT('REVOKE CONNECT on database %s FROM :role',
+                        EXECUTE FORMAT('REVOKE CONNECT on database "%s" FROM :role',
                         CURRENT_DATABASE());
                     END
                 $_$;
@@ -229,7 +229,7 @@ async def grant_connect_privileges(
             """
             DO $_$
                 BEGIN
-                    EXECUTE FORMAT('GRANT CONNECT on database %s TO :role',
+                    EXECUTE FORMAT('GRANT CONNECT on database "%s" TO :role',
                     CURRENT_DATABASE());
                 END
             $_$;
@@ -242,6 +242,7 @@ async def grant_connect_privileges(
 async def active_connections_exist(
     conn: asyncpg.Connection, roles: Sequence[str]
 ) -> bool:
+    """NOTE: This is for individual login roles, not group roles"""
     if roles:
         q, p = render(
             """
@@ -262,6 +263,7 @@ async def force_close_connections(
     roles: Sequence[str],
     timeout_ms: int = 10000,
 ) -> None:
+    """NOTE: This is for individual login roles, not group roles"""
     if roles:
         q, p = render(
             """

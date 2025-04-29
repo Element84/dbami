@@ -1,35 +1,17 @@
 [build-system]
-requires = [
-    "setuptools>=45",
-    "setuptools-scm[toml]>=6.2",
-]
+requires = ["setuptools>=45", "setuptools-scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dbami"
-authors = [
-    {name = "Jarrett Keifer", email = "jkeifer@element84.com"},
-]
+authors = [{ name = "Jarrett Keifer", email = "jkeifer@element84.com" }]
 description = "Lightweight, Python-based, framework-agnostic async PostgreSQL migration tool"
 requires-python = ">=3.9"
-keywords = [
-    "postgresql",
-    "sql",
-    "migration",
-    "async",
-]
-license = {text = "Apache License 2.0"}
-classifiers = [
-    "Programming Language :: Python :: 3",
-]
-dependencies = [
-    "asyncpg >=0.27.0",
-    "buildpg >=0.4",
-]
-dynamic = [
-  "version",
-  "readme",
-]
+keywords = ["postgresql", "sql", "migration", "async"]
+license = { text = "Apache License 2.0" }
+classifiers = ["Programming Language :: Python :: 3"]
+dependencies = ["asyncpg >=0.27.0", "buildpg >=0.4"]
+dynamic = ["version", "readme"]
 
 [project.scripts]
 dbami = "dbami.__main__:main"
@@ -53,21 +35,19 @@ dev = [
 # sadly, we need to include this non-dependency in our
 # requirements.txt to satisfy snyk, so make sure to run
 # `pip-compile` with `--extra snyk`
-snyk = [
-    "typing-extensions",
-]
+snyk = ["typing-extensions"]
 
 [tool.setuptools_scm]
 
 [tool.setuptools.dynamic]
-readme = {file = "README.md", content-type = "text/markdown"}
+readme = { file = "README.md", content-type = "text/markdown" }
 
 [[tool.mypy.overrides]]
-module = [
-    "asyncpg",
-    "buildpg",
-]
+module = ["asyncpg", "buildpg"]
 ignore_missing_imports = true
 
 [tool.isort]
 profile = "black"
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"

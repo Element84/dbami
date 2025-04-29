@@ -58,7 +58,7 @@ def extra_fixtures(tmp_path: Path) -> Path:
 @pytest.fixture
 def tmp_db_name(test_db_name_stem: str, request):
     db_name = (
-        f"{test_db_name_stem}_{request.module.__name__}:{request.function.__name__}"
+        f"{test_db_name_stem}::{request.module.__name__}::{request.function.__name__}"
     )
 
     try:
