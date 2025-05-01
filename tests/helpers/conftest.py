@@ -7,6 +7,7 @@ import pytest_asyncio
 from buildpg import V, render
 
 from dbami.db import DB
+from dbami.util import printe
 
 
 async def create_owner_role(
@@ -17,12 +18,18 @@ async def create_owner_role(
         un=V(owner_role_name),
         pw=V(owner_role_password),
     )
-    await conn.execute(q)
+    try:
+        await conn.execute(q)
+    except asyncpg.DuplicateObjectError:
+        printe(f"Role '{owner_role_name}' already exists, skipping.")
 
 
 async def create_rw_role(conn: asyncpg.Connection, rw_role_name) -> None:
     q, _ = render("CREATE ROLE :un", un=V(rw_role_name))
-    await conn.execute(q)
+    try:
+        await conn.execute(q)
+    except asyncpg.DuplicateObjectError:
+        printe(f"Role '{rw_role_name}' already exists, skipping.")
 
 
 async def create_app_role(
@@ -34,7 +41,10 @@ async def create_app_role(
         pw=V(app_password),
         ir=V(groupname),
     )
-    await conn.execute(q)
+    try:
+        await conn.execute(q)
+    except asyncpg.DuplicateObjectError:
+        printe(f"Role '{app_role_name}' already exists, skipping.")
 
 
 async def drop_roles(conn: asyncpg.Connection, roles: list[str]) -> None:
@@ -46,7 +56,7 @@ async def drop_roles(conn: asyncpg.Connection, roles: list[str]) -> None:
         try:
             await conn.execute(q)
         except asyncpg.InvalidRoleSpecificationError:
-            pass
+            printe(f"Role {role}' already dropped, skipping.")
 
 
 async def create_database(
@@ -57,15 +67,21 @@ async def create_database(
         db=V(db_name),
         o=V(owner_role_name),
     )
-    await conn.execute(q)
+    try:
+        await conn.execute(q)
+    except asyncpg.DuplicateDatabaseError:
+        printe(f"Database '{db_name}' already exists, skipping.")
 
 
 async def drop_database(conn: asyncpg.Connection, db_name: str) -> None:
     q, _ = render(
-        'DROP DATABASe ":db"',
+        'DROP DATABASE ":db"',
         db=V(db_name),
     )
-    await conn.execute(q)
+    try:
+        await conn.execute(q)
+    except asyncpg.UndefinedObjectError:
+        printe(f"Database '{db_name}' already dropped, skipping.")
 
 
 async def post_create_init(

@@ -10,13 +10,9 @@ import asyncpg
 from dbami import exceptions
 from dbami.constants import SCHEMA_VERSION_TABLE
 from dbami.db import DB
-from dbami.util import syncrun
+from dbami.util import printe, syncrun
 
 DEFAULT_ENV_PREFIX = "DBAMI"
-
-
-def printe(*args, **kwargs) -> None:
-    print(*args, file=sys.stderr, **kwargs)
 
 
 def target_type(val: Any, default_label: str) -> int:
