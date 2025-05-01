@@ -12,39 +12,39 @@ from dbami.db import DB
 async def create_owner_role(
     conn: asyncpg.Connection, owner_role_name: str, owner_role_password: str
 ) -> None:
-    q, p = render(
+    q, _ = render(
         "CREATE ROLE :un WITH LOGIN PASSWORD ':pw'",
         un=V(owner_role_name),
         pw=V(owner_role_password),
     )
-    await conn.execute(q, *p)
+    await conn.execute(q)
 
 
 async def create_rw_role(conn: asyncpg.Connection, rw_role_name) -> None:
-    q, p = render("CREATE ROLE :un", un=V(rw_role_name))
-    await conn.execute(q, *p)
+    q, _ = render("CREATE ROLE :un", un=V(rw_role_name))
+    await conn.execute(q)
 
 
 async def create_app_role(
     conn: asyncpg.Connection, app_role_name: str, app_password: str, groupname: str
 ) -> None:
-    q, p = render(
+    q, _ = render(
         "CREATE ROLE :un WITH LOGIN IN ROLE :ir PASSWORD ':pw'",
         un=V(app_role_name),
         pw=V(app_password),
         ir=V(groupname),
     )
-    await conn.execute(q, *p)
+    await conn.execute(q)
 
 
 async def drop_roles(conn: asyncpg.Connection, roles: list[str]) -> None:
     for role in roles:
-        q, p = render(
-            "DROP ROLE :role",
-            role=V(role),
+        q, _ = render(
+            "DROP ROLE :r",
+            r=V(role),
         )
         try:
-            await conn.execute(q, *p)
+            await conn.execute(q)
         except asyncpg.InvalidRoleSpecificationError:
             pass
 
@@ -52,32 +52,45 @@ async def drop_roles(conn: asyncpg.Connection, roles: list[str]) -> None:
 async def create_database(
     conn: asyncpg.Connection, db_name: str, owner_role_name: str
 ) -> None:
-    await conn.execute(f'CREATE DATABASE "{db_name}" WITH OWNER {owner_role_name}')
+    q, _ = render(
+        'CREATE DATABASE ":db" WITH OWNER :o',
+        db=V(db_name),
+        o=V(owner_role_name),
+    )
+    await conn.execute(q)
 
 
 async def drop_database(conn: asyncpg.Connection, db_name: str) -> None:
-    await conn.execute(f'DROP DATABASE "{db_name}"')
+    q, _ = render(
+        'DROP DATABASe ":db"',
+        db=V(db_name),
+    )
+    await conn.execute(q)
 
 
 async def post_create_init(
     conn: asyncpg.Connection, db_name: str, owner_role_name: str, rw_role_name: str
 ) -> None:
-    await conn.execute(
-        f"""
-        REVOKE ALL ON DATABASE "{db_name}" FROM PUBLIC;
-        REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-        CREATE SCHEMA IF NOT EXISTS "{db_name}" AUTHORIZATION {owner_role_name};
-        GRANT pg_signal_backend TO {owner_role_name};
-        GRANT {owner_role_name} TO current_user;
-        SET ROLE {owner_role_name};
-        GRANT CONNECT ON DATABASE "{db_name}" TO {rw_role_name};
-        GRANT USAGE, CREATE ON SCHEMA "{db_name}" TO {rw_role_name};
-        ALTER DEFAULT PRIVILEGES IN SCHEMA "{db_name}" GRANT SELECT,
-            INSERT, UPDATE, DELETE ON TABLES TO {rw_role_name};
-        ALTER DEFAULT PRIVILEGES IN SCHEMA "{db_name}" GRANT USAGE ON
-            SEQUENCES TO {rw_role_name};
+    q, _ = render(
         """
+        REVOKE ALL ON DATABASE ":db" FROM PUBLIC;
+        REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+        CREATE SCHEMA IF NOT EXISTS ":db" AUTHORIZATION :o;
+        GRANT pg_signal_backend TO :o;
+        GRANT :o TO current_user;
+        SET ROLE :o;
+        GRANT CONNECT ON DATABASE ":db" TO :rw;
+        GRANT USAGE, CREATE ON SCHEMA ":db" TO :rw;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ":db" GRANT SELECT,
+            INSERT, UPDATE, DELETE ON TABLES TO :rw;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ":db" GRANT USAGE ON
+            SEQUENCES TO :rw;
+        """,
+        db=V(db_name),
+        o=V(owner_role_name),
+        rw=V(rw_role_name),
     )
+    await conn.execute(q)
 
 
 @pytest.fixture
