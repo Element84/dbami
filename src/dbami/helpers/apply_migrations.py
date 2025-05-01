@@ -81,7 +81,7 @@ class MigrationHelper(Helper[MigrationHelperConfig]):
     def get_config_class(cls) -> Type[MigrationHelperConfig]:
         return MigrationHelperConfig
 
-    async def wait_for_other_connections_to_close(
+    async def other_connections_closed(
         self,
         conn: asyncpg.Connection,
         poll_interval_ms: int = 2000,
@@ -145,7 +145,7 @@ class MigrationHelper(Helper[MigrationHelperConfig]):
                         self.logger.info(
                             "Waiting on all connections to close before migrating..."
                         )
-                        conns_closed = await self.wait_for_other_connections_to_close(
+                        conns_closed = await self.other_connections_closed(
                             conn,
                             self.config.connection_wait_poll_interval_ms,
                             self.config.connection_wait_max_polls,
