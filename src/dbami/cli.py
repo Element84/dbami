@@ -433,7 +433,11 @@ class Migrate(DbamiCommand):
                     timeout_ms=timeout_ms,
                     database=args.database,
                 )
-            except exceptions.DirectionError as e:
+            except (
+                exceptions.DirectionError,
+                exceptions.MigrationError,
+                exceptions.LockError,
+            ) as e:
                 printe(e)
                 return 1
             return 0
