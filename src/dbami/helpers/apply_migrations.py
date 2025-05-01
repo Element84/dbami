@@ -111,16 +111,13 @@ class MigrationHelper(Helper[MigrationHelperConfig]):
             **self.connect_kwargs,
         ) as conn:
             if self.config.target_migration_version is None:
-                try:
-                    self.config.target_migration_version = max(
-                        self.database.migrations.keys()
+                if not len(self.database.migrations.keys()):
+                    raise MigrationError(
+                        "No migrations exist, there is nothing to apply"
                     )
-                except ValueError as exc:
-                    if str(exc) == "max() iterable argument is empty":
-                        raise MigrationError(
-                            "No migrations exist, there is nothing to apply"
-                        ) from exc
-                    raise
+                self.config.target_migration_version = max(
+                    self.database.migrations.keys()
+                )
 
             current_version = await self.database.get_current_version(conn=conn)
 
