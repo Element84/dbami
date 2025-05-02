@@ -36,7 +36,7 @@ async def create_app_role(
     conn: asyncpg.Connection, app_role_name: str, app_password: str, groupname: str
 ) -> None:
     q, _ = render(
-        "CREATE ROLE :un WITH LOGIN IN ROLE :ir PASSWORD ':pw'",
+        "CREATE ROLE :un WITH LOGIN PASSWORD ':pw' IN ROLE :ir",
         un=V(app_role_name),
         pw=V(app_password),
         ir=V(groupname),
@@ -62,13 +62,20 @@ async def drop_roles(conn: asyncpg.Connection, roles: list[str]) -> None:
 async def create_database(
     conn: asyncpg.Connection, db_name: str, owner_role_name: str
 ) -> None:
-    q, _ = render(
+    # in AWS RDS, the user creating a database must be granted the role that will be the
+    # owner of the database (not necessary in our case here, but including for those who
+    # use this as a reference)
+    grant_q, _ = render("GRANT :o TO current_user", o=V(owner_role_name))
+    # using a separate statement since CREATE DATABASE cannot be executed inside a
+    # transaction block
+    create_q, _ = render(
         'CREATE DATABASE ":db" WITH OWNER :o',
         db=V(db_name),
         o=V(owner_role_name),
     )
     try:
-        await conn.execute(q)
+        await conn.execute(grant_q)
+        await conn.execute(create_q)
     except asyncpg.DuplicateDatabaseError:
         printe(f"Database '{db_name}' already exists, skipping.")
 
@@ -89,18 +96,30 @@ async def post_create_init(
 ) -> None:
     q, _ = render(
         """
+        -- clear the default permissions, so we can setup tighter ones
         REVOKE ALL ON DATABASE ":db" FROM PUBLIC;
         REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-        CREATE SCHEMA IF NOT EXISTS ":db" AUTHORIZATION :o;
-        GRANT pg_signal_backend TO :o;
-        GRANT :o TO current_user;
-        SET ROLE :o;
+
+        -- grant database-level permissions.
+        -- in AWS RDS, the GRANT CONNECT must be done as psuedo-superuser
+        GRANT ALL ON DATABASE ":db" TO :o;
         GRANT CONNECT ON DATABASE ":db" TO :rw;
+
+        -- allow owner role to force close read/write member users connections
+        GRANT pg_signal_backend TO :o;
+
+        -- run remaining commands as if we are the owner role
+        SET ROLE :o;
+
+        -- create schema and grant basic permissions
+        CREATE SCHEMA IF NOT EXISTS ":db" AUTHORIZATION :o;
         GRANT USAGE, CREATE ON SCHEMA ":db" TO :rw;
-        ALTER DEFAULT PRIVILEGES IN SCHEMA ":db" GRANT SELECT,
-            INSERT, UPDATE, DELETE ON TABLES TO :rw;
-        ALTER DEFAULT PRIVILEGES IN SCHEMA ":db" GRANT USAGE ON
-            SEQUENCES TO :rw;
+
+        -- alter default privileges so users will have access to new tables
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ":db" GRANT
+            SELECT, INSERT, UPDATE, DELETE ON TABLES TO :rw;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA ":db" GRANT
+            USAGE ON SEQUENCES TO :rw;
         """,
         db=V(db_name),
         o=V(owner_role_name),
