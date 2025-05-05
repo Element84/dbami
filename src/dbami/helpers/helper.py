@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Generic, Optional, Type, TypeVar
+from typing import Generic, Optional, TypeVar
 
 from dbami.db import DB
 
@@ -20,13 +20,13 @@ class Helper(abc.ABC, Generic[T]):
         self.connect_kwargs = connect_kwargs
 
         if helper_config is None:
-            helper_config = self.get_config_class()()
+            helper_config = self.get_config_class()
 
         self.config = helper_config
 
     @classmethod
     @abc.abstractmethod
-    def get_config_class(cls) -> Type[T]:
+    def get_config_class(cls) -> T:
         pass
 
     @abc.abstractmethod

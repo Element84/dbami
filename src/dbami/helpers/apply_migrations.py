@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Literal, Optional, Sequence, Type
+from typing import Literal, Optional, Sequence
 
 import asyncpg
 from buildpg import V, Values, render
@@ -78,8 +78,8 @@ class MigrationHelperConfig:
 
 class MigrationHelper(Helper[MigrationHelperConfig]):
     @classmethod
-    def get_config_class(cls) -> Type[MigrationHelperConfig]:
-        return MigrationHelperConfig
+    def get_config_class(cls) -> MigrationHelperConfig:
+        return MigrationHelperConfig()
 
     async def other_connections_closed(
         self,
