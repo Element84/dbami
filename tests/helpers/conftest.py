@@ -55,7 +55,7 @@ async def drop_roles(conn: asyncpg.Connection, roles: list[str]) -> None:
         )
         try:
             await conn.execute(q)
-        except asyncpg.InvalidRoleSpecificationError:
+        except asyncpg.UndefinedObjectError:
             printe(f"Role {role}' already dropped, skipping.")
 
 
@@ -87,7 +87,7 @@ async def drop_database(conn: asyncpg.Connection, db_name: str) -> None:
     )
     try:
         await conn.execute(q)
-    except asyncpg.UndefinedObjectError:
+    except asyncpg.InvalidCatalogNameError:
         printe(f"Database '{db_name}' already dropped, skipping.")
 
 
