@@ -465,8 +465,11 @@ class DB:
                     "Unable to acquire a migration lock because it is held by another "
                     "user."
                 )
-            yield conn
-            await self.execute_sql(unlock_query, *unlock_params, conn=conn)
+
+            try:
+                yield conn
+            finally:
+                await self.execute_sql(unlock_query, *unlock_params, conn=conn)
 
     async def migrate(
         self,
