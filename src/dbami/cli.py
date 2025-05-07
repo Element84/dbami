@@ -453,6 +453,8 @@ class Rollback(DbamiCommand):
         Arguments.database(parser)
         Arguments.migration_target(parser, "last")
         Arguments.version_table(parser)
+        Arguments.no_lock(parser)
+        Arguments.lock_timeout(parser)
 
     def __call__(self, args: argparse.Namespace) -> int:
         async def run() -> int:
@@ -468,10 +470,15 @@ class Rollback(DbamiCommand):
 
                 target = current - 1
 
+            use_lock = not args.no_lock
+            timeout_ms = args.lock_timeout * 1000
+
             try:
                 await args.db.migrate(
                     target=target,
                     direction="down",
+                    use_lock=use_lock,
+                    timeout_ms=timeout_ms,
                     database=args.database,
                 )
             except (exceptions.DirectionError, exceptions.MigrationError) as e:
@@ -493,6 +500,8 @@ class Up(DbamiCommand):
         Arguments.wait_timeout(parser)
         Arguments.database(parser)
         Arguments.version_table(parser)
+        Arguments.no_lock(parser)
+        Arguments.lock_timeout(parser)
 
     def __call__(self, args: argparse.Namespace) -> int:
         async def run() -> int:
@@ -501,8 +510,16 @@ class Up(DbamiCommand):
             except asyncpg.DuplicateDatabaseError:
                 pass
 
+            use_lock = not args.no_lock
+            timeout_ms = args.lock_timeout * 1000
+
             try:
-                await args.db.migrate(direction="up", database=args.database)
+                await args.db.migrate(
+                    direction="up",
+                    use_lock=use_lock,
+                    timeout_ms=timeout_ms,
+                    database=args.database,
+                )
             except (exceptions.DirectionError, exceptions.MigrationError) as e:
                 printe(e)
                 return 1

@@ -476,6 +476,7 @@ class DB:
         target: Optional[int] = None,
         direction: Union[Literal["up"], Literal["down"], None] = None,
         use_lock: bool = True,
+        timeout_ms: int = 0,
         **kwargs,
     ) -> None:
         if not self.migrations:
@@ -483,7 +484,7 @@ class DB:
 
         min_migration = min(self.migrations.keys())
 
-        async with self.migration_lock(use_lock=use_lock, **kwargs) as conn:
+        async with self.migration_lock(use_lock, timeout_ms, **kwargs) as conn:
             _version = await self.get_current_version(conn=conn)
             schema_version: int = (
                 _version if _version is not None else min_migration - 1
