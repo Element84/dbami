@@ -435,6 +435,9 @@ class DB:
                 """
                 DO $_$
                     BEGIN
+                        IF to_regclass(':version_table') IS NULL THEN
+                            RAISE EXCEPTION 'schema version table does not exist';
+                        END IF;
                         SET lock_timeout = :timeout_ms;
                         PERFORM pg_advisory_lock(
                             :dbami_lock_id,
@@ -465,6 +468,13 @@ class DB:
                     "Unable to acquire a migration lock because it is held by another "
                     "user."
                 )
+            except asyncpg.exceptions.RaiseError as e:
+                if "schema version table does not exist" in str(e):
+                    raise exceptions.LockError(
+                        "Unable to acquire a migration lock because the schema version "
+                        f"table '{self.schema_version_table}' does not exist."
+                    )
+                raise
 
             try:
                 yield conn
