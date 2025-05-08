@@ -59,10 +59,10 @@ class MigrationHelperConfig:
     target_migration_version: Optional[int] = None
     do_rollback: bool = False
     use_migration_lock: bool = True
-    migration_lock_acquisition_timeout_ms: int = 10000
+    migration_lock_acquisition_timeout_ms: int = 30000
     revoke_connect_on_role_names: Sequence[str] = field(default_factory=list)
-    connection_wait_max_polls: Optional[int] = 60
-    connection_wait_poll_interval_ms: int = 2000
+    connection_wait_max_polls: Optional[int] = 10
+    connection_wait_poll_interval_ms: int = 1000
     force_close_connections_timeout_ms: Optional[int] = 10000
 
     def __post_init__(self) -> None:
