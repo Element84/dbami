@@ -374,7 +374,11 @@ class DB:
 
         await self.run_sqlfile(fixture, **kwargs)
 
-    async def _create_schema_and_version_table(self, conn: asyncpg.Connection) -> None:
+    async def _update_schema_version(
+        self,
+        version: int,
+        conn: asyncpg.Connection,
+    ) -> None:
         table_sql, _ = render(
             """
             CREATE TABLE IF NOT EXISTS :version_table (
@@ -402,13 +406,6 @@ class DB:
             await self.execute_sql(schema_sql, conn=conn)
             await self.execute_sql(table_sql, conn=conn)
 
-    async def _update_schema_version(
-        self,
-        version: int,
-        conn: asyncpg.Connection,
-    ) -> None:
-        await self._create_schema_and_version_table(conn)
-
         version_sql, params = render(
             "INSERT INTO :version_table (version) VALUES (:version)",
             version_table=V(self.schema_version_table),
@@ -429,36 +426,23 @@ class DB:
                 yield conn
                 return
 
-            await self._create_schema_and_version_table(conn)
-
             lock_query, _ = render(
                 """
                 DO $_$
                     BEGIN
-                        IF to_regclass(':version_table') IS NULL THEN
-                            RAISE EXCEPTION 'schema version table does not exist';
-                        END IF;
                         SET lock_timeout = :timeout_ms;
-                        PERFORM pg_advisory_lock(
-                            :dbami_lock_id,
-                            to_regclass(':version_table')::integer
-                        );
+                        PERFORM pg_advisory_lock(:dbami_lock_id);
                     END
                 $_$;
                 """,
                 timeout_ms=V(str(timeout_ms)),
                 dbami_lock_id=V(str(DBAMI_LOCK_ID)),
-                version_table=V(self.schema_version_table),
             )
             unlock_query, unlock_params = render(
                 """
-                SELECT pg_advisory_unlock(
-                    :dbami_lock_id,
-                    to_regclass(:version_table)::oid::integer
-                )
+                SELECT pg_advisory_unlock(:dbami_lock_id)
                 """,
                 dbami_lock_id=DBAMI_LOCK_ID,
-                version_table=self.schema_version_table,
             )
 
             try:
@@ -468,13 +452,6 @@ class DB:
                     "Unable to acquire a migration lock because it is held by another "
                     "user."
                 )
-            except asyncpg.exceptions.RaiseError as e:
-                if "schema version table does not exist" in str(e):
-                    raise exceptions.LockError(
-                        "Unable to acquire a migration lock because the schema version "
-                        f"table '{self.schema_version_table}' does not exist."
-                    )
-                raise
 
             try:
                 yield conn
