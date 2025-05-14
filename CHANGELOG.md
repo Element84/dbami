@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v0.4.0] - 2025-05-14
+
+### Added
+
+- `migration_lock` context manager that yields a database connection after obtaining
+  an exclusive session-level advisory lock. ([#14])
+- `--no-lock` option to the `migrate`, `rollback`, and `up` CLI commands. ([#14])
+- `--lock-timeout` option to the `migrate`, `rollback`, and `up` CLI commands. ([#14])
+- `MigrationHelper` utilty class to assist in obtaining an advisory lock, revoking
+  connect privileges from other users, waiting for other connections to close, and
+  terminating other connections prior to running migrations. ([#14])
+
+### Changed
+
+- Database migrations default to obtaining an advisory lock before running. ([#14])
+
 ## [v0.3.1] - 2025-02-04
 
 ### Added
@@ -43,7 +59,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 Initial release
 
-[unreleased]: https://github.com/element84/dbami/compare/v0.3.1...main
+[unreleased]: https://github.com/element84/dbami/compare/v0.4.0...main
+[v0.4.0]: https://github.com/element84/dbami/compare/v0.3.1...v0.4.0
 [v0.3.1]: https://github.com/element84/dbami/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/element84/dbami/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/element84/dbami/compare/v0.1.0...v0.2.0
@@ -52,3 +69,4 @@ Initial release
 [#10]: https://github.com/Element84/dbami/pull/10
 [#11]: https://github.com/Element84/dbami/pull/11
 [#13]: https://github.com/Element84/dbami/pull/13
+[#14]: https://github.com/Element84/dbami/pull/14
