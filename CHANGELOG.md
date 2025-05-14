@@ -15,9 +15,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   an exclusive session-level advisory lock. ([#14])
 - `--no-lock` option to the `migrate`, `rollback`, and `up` CLI commands. ([#14])
 - `--lock-timeout` option to the `migrate`, `rollback`, and `up` CLI commands. ([#14])
-- `MigrationHelper` utilty class to assist in obtaining an advisory lock, revoking
-  connect privileges from other users, waiting for other connections to close, and
-  terminating other connections prior to running migrations. ([#14])
+- **Experimental** `MigrationHelper` utilty class to assist in obtaining an advisory
+  lock, revoking connect privileges from other users, waiting for other connections to
+  close, and terminating other connections prior to running migrations. ([#14])
 
 ### Changed
 
