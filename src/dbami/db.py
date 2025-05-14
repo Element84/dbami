@@ -11,7 +11,7 @@ import asyncpg
 from buildpg import V, render
 
 from dbami import exceptions
-from dbami.constants import SCHEMA_VERSION_TABLE
+from dbami.constants import DBAMI_LOCK_ID, SCHEMA_VERSION_TABLE
 from dbami.util import random_name
 
 logger = logging.getLogger(__name__)
@@ -233,8 +233,12 @@ class DB:
                 f"Fixtures directory is not a directory: {migrations}",
             )
 
-    def next_migration_id(self):
-        return max(self.migrations.keys()) + 1 if self.migrations else 0
+    def current_migration_id(self) -> Optional[int]:
+        return max(self.migrations.keys()) if self.migrations else None
+
+    def next_migration_id(self) -> int:
+        current = self.current_migration_id()
+        return current + 1 if current is not None else 0
 
     def new_migration(
         self,
@@ -356,10 +360,11 @@ class DB:
         async with self.get_db_connection(**kwargs) as conn:
             async with conn.transaction():
                 await self.run_sqlfile(self.schema, conn=conn)
-                await self._update_schema_version(
-                    max(self.migrations.keys()),
-                    conn,
-                )
+                if (current_migration_id := self.current_migration_id()) is not None:
+                    await self._update_schema_version(
+                        current_migration_id,
+                        conn,
+                    )
 
     async def load_fixture(self, fixture_name: str, **kwargs):
         try:
@@ -372,7 +377,7 @@ class DB:
     async def _update_schema_version(
         self,
         version: int,
-        conn,
+        conn: asyncpg.Connection,
     ) -> None:
         table_sql, _ = render(
             """
@@ -385,11 +390,6 @@ class DB:
             CREATE INDEX ON :version_table (applied_at);
             """,
             version_table=V(self.schema_version_table),
-        )
-        version_sql, params = render(
-            "INSERT INTO :version_table (version) VALUES (:version)",
-            version_table=V(self.schema_version_table),
-            version=version,
         )
 
         try:
@@ -406,12 +406,64 @@ class DB:
             await self.execute_sql(schema_sql, conn=conn)
             await self.execute_sql(table_sql, conn=conn)
 
+        version_sql, params = render(
+            "INSERT INTO :version_table (version) VALUES (:version)",
+            version_table=V(self.schema_version_table),
+            version=version,
+        )
+
         await self.execute_sql(version_sql, *params, conn=conn)
+
+    @asynccontextmanager
+    async def migration_lock(
+        self,
+        use_lock: bool = True,
+        timeout_ms: int = 0,
+        **kwargs,
+    ) -> AsyncIterator[asyncpg.Connection]:
+        async with self.get_db_connection(**kwargs) as conn:
+            if not use_lock:
+                yield conn
+                return
+
+            lock_query, _ = render(
+                """
+                DO $_$
+                    BEGIN
+                        SET lock_timeout = :timeout_ms;
+                        PERFORM pg_advisory_lock(:dbami_lock_id);
+                    END
+                $_$;
+                """,
+                timeout_ms=V(str(timeout_ms)),
+                dbami_lock_id=V(str(DBAMI_LOCK_ID)),
+            )
+            unlock_query, unlock_params = render(
+                """
+                SELECT pg_advisory_unlock(:dbami_lock_id)
+                """,
+                dbami_lock_id=DBAMI_LOCK_ID,
+            )
+
+            try:
+                await self.execute_sql(lock_query, conn=conn)
+            except asyncpg.exceptions.LockNotAvailableError:
+                raise exceptions.LockError(
+                    "Unable to acquire a migration lock because it is held by another "
+                    "user."
+                )
+
+            try:
+                yield conn
+            finally:
+                await self.execute_sql(unlock_query, *unlock_params, conn=conn)
 
     async def migrate(
         self,
         target: Optional[int] = None,
         direction: Union[Literal["up"], Literal["down"], None] = None,
+        use_lock: bool = True,
+        timeout_ms: int = 0,
         **kwargs,
     ) -> None:
         if not self.migrations:
@@ -419,7 +471,7 @@ class DB:
 
         min_migration = min(self.migrations.keys())
 
-        async with self.get_db_connection(**kwargs) as conn:
+        async with self.migration_lock(use_lock, timeout_ms, **kwargs) as conn:
             _version = await self.get_current_version(conn=conn)
             schema_version: int = (
                 _version if _version is not None else min_migration - 1

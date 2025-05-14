@@ -8,3 +8,7 @@ class MigrationError(DbamiError, ValueError):
 
 class DirectionError(MigrationError):
     pass
+
+
+class LockError(DbamiError):
+    pass

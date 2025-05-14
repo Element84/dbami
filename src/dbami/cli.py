@@ -10,13 +10,9 @@ import asyncpg
 from dbami import exceptions
 from dbami.constants import SCHEMA_VERSION_TABLE
 from dbami.db import DB
-from dbami.util import syncrun
+from dbami.util import printe, syncrun
 
 DEFAULT_ENV_PREFIX = "DBAMI"
-
-
-def printe(*args, **kwargs) -> None:
-    print(*args, file=sys.stderr, **kwargs)
 
 
 def target_type(val: Any, default_label: str) -> int:
@@ -29,6 +25,18 @@ def target_type(val: Any, default_label: str) -> int:
         raise argparse.ArgumentTypeError("must be a non-negative integer")
 
     return val
+
+
+def positive_int(val: Any) -> int:
+    try:
+        int_val = int(val)
+    except ValueError:
+        raise argparse.ArgumentTypeError("invalid integer value")
+
+    if int_val < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative integer")
+
+    return int_val
 
 
 class Arguments:
@@ -90,6 +98,29 @@ class Arguments:
             default=default_label,
             type=lambda x: target_type(x, default_label),
             help=f"(default: '{default_label}')",
+        )
+
+    @classmethod
+    def no_lock(
+        cls,
+        parser: argparse.ArgumentParser,
+    ) -> None:
+        parser.add_argument(
+            "--no-lock",
+            action="store_true",
+            help="do not lock db access during migration",
+        )
+
+    @classmethod
+    def lock_timeout(
+        cls,
+        parser: argparse.ArgumentParser,
+    ) -> None:
+        parser.add_argument(
+            "--lock-timeout",
+            default=0,
+            type=positive_int,
+            help="seconds to wait for db lock; 0 waits indefinitely",
         )
 
     @classmethod
@@ -382,17 +413,27 @@ class Migrate(DbamiCommand):
         Arguments.database(parser)
         Arguments.migration_target(parser, "latest")
         Arguments.version_table(parser)
+        Arguments.no_lock(parser)
+        Arguments.lock_timeout(parser)
 
     def __call__(self, args: argparse.Namespace) -> int:
         async def run() -> int:
             target: Optional[int] = None if args.target == -1 else args.target
+            use_lock = not args.no_lock
+            timeout_ms = args.lock_timeout * 1000
             try:
                 await args.db.migrate(
                     target=target,
                     direction="up",
+                    use_lock=use_lock,
+                    timeout_ms=timeout_ms,
                     database=args.database,
                 )
-            except exceptions.DirectionError as e:
+            except (
+                exceptions.DirectionError,
+                exceptions.MigrationError,
+                exceptions.LockError,
+            ) as e:
                 printe(e)
                 return 1
             return 0
@@ -412,6 +453,8 @@ class Rollback(DbamiCommand):
         Arguments.database(parser)
         Arguments.migration_target(parser, "last")
         Arguments.version_table(parser)
+        Arguments.no_lock(parser)
+        Arguments.lock_timeout(parser)
 
     def __call__(self, args: argparse.Namespace) -> int:
         async def run() -> int:
@@ -427,10 +470,15 @@ class Rollback(DbamiCommand):
 
                 target = current - 1
 
+            use_lock = not args.no_lock
+            timeout_ms = args.lock_timeout * 1000
+
             try:
                 await args.db.migrate(
                     target=target,
                     direction="down",
+                    use_lock=use_lock,
+                    timeout_ms=timeout_ms,
                     database=args.database,
                 )
             except (exceptions.DirectionError, exceptions.MigrationError) as e:
@@ -452,6 +500,8 @@ class Up(DbamiCommand):
         Arguments.wait_timeout(parser)
         Arguments.database(parser)
         Arguments.version_table(parser)
+        Arguments.no_lock(parser)
+        Arguments.lock_timeout(parser)
 
     def __call__(self, args: argparse.Namespace) -> int:
         async def run() -> int:
@@ -460,8 +510,16 @@ class Up(DbamiCommand):
             except asyncpg.DuplicateDatabaseError:
                 pass
 
+            use_lock = not args.no_lock
+            timeout_ms = args.lock_timeout * 1000
+
             try:
-                await args.db.migrate(direction="up", database=args.database)
+                await args.db.migrate(
+                    direction="up",
+                    use_lock=use_lock,
+                    timeout_ms=timeout_ms,
+                    database=args.database,
+                )
             except (exceptions.DirectionError, exceptions.MigrationError) as e:
                 printe(e)
                 return 1

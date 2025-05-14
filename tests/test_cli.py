@@ -7,7 +7,6 @@ from typing import Optional, TextIO
 import asyncpg
 import pytest
 
-from dbami import exceptions
 from dbami.__main__ import main as cli_main
 from dbami.db import DB
 from dbami.util import syncrun
@@ -218,11 +217,11 @@ def test_migrate_different_version_table(tmp_db, project_dir):
 
 def test_migrate_bad_target(tmp_db, project_dir):
     target = 10
-    with pytest.raises(exceptions.MigrationError) as exc_info:
-        run_cli("migrate", "--target", str(target), "--database", tmp_db)
-    assert (
-        str(exc_info.value) == f"Target migration ID '{target}' has no known migration"
-    )
+    rc, out, err = run_cli("migrate", "--target", str(target), "--database", tmp_db)
+    print(out)
+    print(err)
+    assert rc == 1
+    assert err == f"Target migration ID '{target}' has no known migration\n"
 
 
 def test_migrate_wrong_direction(tmp_db, project_dir):
