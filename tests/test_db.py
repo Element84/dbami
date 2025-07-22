@@ -123,7 +123,7 @@ async def test_rollback(tmp_db, project):
 
 @pytest.mark.asyncio
 async def test_rollback_bad_file(tmp_db, project):
-    project.migrations[2].down.path.write_text("not valid sql")
+    project.migrations[3].down.path.write_text("not valid sql")
     await project.load_schema(database=tmp_db)
     with pytest.raises(asyncpg.PostgresSyntaxError):
         await project.migrate(target=2, database=tmp_db)

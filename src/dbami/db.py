@@ -486,7 +486,7 @@ class DB:
 
                 # build rollback chain
                 chain: list[Migration] = []
-                while next_migration and next_migration.id >= target:
+                while next_migration and next_migration.id > target:
                     if next_migration.down is None:
                         raise exceptions.MigrationError(
                             f"Cannot rollback from version {schema_version} "
@@ -504,7 +504,7 @@ class DB:
                         async with conn.transaction():
                             await self.run_sqlfile(migration.down, conn=conn)
                             await self._update_schema_version(
-                                migration.id,
+                                migration.id - 1,
                                 conn,
                             )
 
