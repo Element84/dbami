@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [v0.5.0] - 2025-07-24
+
+### Fixed
+
+- Rollback will now stop at the target migration version as expected, not
+  rollback one past it ([#19])
+
 ## [v0.4.0] - 2025-05-14
 
 ### Added
@@ -59,7 +66,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 Initial release
 
-[unreleased]: https://github.com/element84/dbami/compare/v0.4.0...main
+[unreleased]: https://github.com/element84/dbami/compare/v0.5.0...main
+[v0.5.0]: https://github.com/element84/dbami/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/element84/dbami/compare/v0.3.1...v0.4.0
 [v0.3.1]: https://github.com/element84/dbami/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/element84/dbami/compare/v0.2.0...v0.3.0
@@ -70,3 +78,4 @@ Initial release
 [#11]: https://github.com/Element84/dbami/pull/11
 [#13]: https://github.com/Element84/dbami/pull/13
 [#14]: https://github.com/Element84/dbami/pull/14
+[#19]: https://github.com/Element84/dbami/pull/19
