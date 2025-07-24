@@ -19,6 +19,7 @@ dbami = "dbami.__main__:main"
 [project.optional-dependencies]
 dev = [
     "black >=23.1.0",
+    "cogapp >= 3.5.1",
     "httpx >=0.24.0",
     "isort >=5.12.0",
     "mypy >=1.0.1",
