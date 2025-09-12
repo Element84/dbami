@@ -604,6 +604,23 @@ class DB:
         if schema_rc != 0 or migrate_rc != 0:
             raise RuntimeError("Encoutered an error dumping databases")
 
+        # The following filters restrict keys per
+        # https://github.com/Element84/dbami/issues/21
+        # Ideally we'd be able to use --restrict-key, something
+        # like adding f"--restrict-key={uuid4().bytes.hex()}"
+        # as an option to our pg_dump command, but older
+        # pg_dump versions will error with that option.
+        schema_dump = "\n".join(
+            line
+            for line in schema_dump.splitlines()
+            if not (line.startswith("\\restrict") or line.startswith("\\unrestrict"))
+        )
+        migrate_dump = "\n".join(
+            line
+            for line in migrate_dump.splitlines()
+            if not (line.startswith("\\restrict") or line.startswith("\\unrestrict"))
+        )
+
         is_diff: bool = False
 
         if schema_dump != migrate_dump:
