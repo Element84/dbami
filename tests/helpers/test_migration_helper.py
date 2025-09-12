@@ -12,9 +12,9 @@ from dbami.helpers.apply_migrations import (
 )
 
 
+@pytest.mark.usefixtures("db_initialization")
 @pytest.mark.asyncio
 async def test_revoke_grant_connect_privileges(
-    db_initialization,
     tmp_db_name,
     app_role_names,
     app_role_pswds,
@@ -51,9 +51,9 @@ async def test_revoke_grant_connect_privileges(
     )
 
 
+@pytest.mark.usefixtures("db_initialization")
 @pytest.mark.asyncio
 async def test_active_connections_exist(
-    db_initialization,
     tmp_db_name,
     app_role_names,
     app_role_pswds,
@@ -73,9 +73,9 @@ async def test_active_connections_exist(
             assert await active_connections_exist(owner_conn, app_role_names)
 
 
+@pytest.mark.usefixtures("db_initialization")
 @pytest.mark.asyncio
 async def test_force_close_connections(
-    db_initialization,
     tmp_db_name,
     app_role_names,
     app_role_pswds,
@@ -97,9 +97,9 @@ async def test_force_close_connections(
             assert not await active_connections_exist(owner_conn, [app_role_names[0]])
 
 
+@pytest.mark.usefixtures("db_initialization")
 @pytest.mark.asyncio
 async def test_advisory_lock_context_manager(
-    db_initialization,
     tmp_db_name,
     empty_project,
     owner_role_name,
@@ -128,9 +128,9 @@ async def test_advisory_lock_context_manager(
         assert not await advisory_lock_exists(conn)
 
 
+@pytest.mark.usefixtures("db_initialization")
 @pytest.mark.asyncio
 async def test_migrate_up(
-    db_initialization,
     test_logger,
     tmp_db_name,
     project,
@@ -158,9 +158,9 @@ async def test_migrate_up(
     )
 
 
+@pytest.mark.usefixtures("db_initialization")
 @pytest.mark.asyncio
 async def test_migrate_down(
-    db_initialization,
     test_logger,
     tmp_db_name,
     project,
