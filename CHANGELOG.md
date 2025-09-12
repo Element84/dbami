@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve verify issue introduced with latest postgres releases and the
+  introduction of the new `restricted` meta-command. See [#21] for details.
+  Fixed in [#22].
+
 ## [v0.5.0] - 2025-07-24
 
 ### Fixed
@@ -79,3 +85,6 @@ Initial release
 [#13]: https://github.com/Element84/dbami/pull/13
 [#14]: https://github.com/Element84/dbami/pull/14
 [#19]: https://github.com/Element84/dbami/pull/19
+[#22]: https://github.com/Element84/dbami/pull/22
+
+[#21]: https://github.com/Element84/dbami/issue/21
